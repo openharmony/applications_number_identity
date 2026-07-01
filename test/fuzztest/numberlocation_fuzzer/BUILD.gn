@@ -1,0 +1,77 @@
+# Copyright (c) Huawei Technologies Co., Ltd. 2024. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#####################hydra-fuzz###################
+SUBSYSTEM_DIR = "../../../../"
+import("//build/config/features.gni")
+import("//build/ohos.gni")
+import("//build/test.gni")
+
+##############################fuzztest##########################################
+ohos_fuzztest("NumberLocationFuzzTest") {
+  module_output_path = "call_enhanced/number_identity"
+  module_out_path = module_output_path
+  fuzz_config_file = "$SUBSYSTEM_DIR/number_identity/test/fuzztest/numberlocation_fuzzer"
+
+  deps = [
+    "$SUBSYSTEM_DIR/number_identity:number_identity",
+  ]
+
+  include_dirs = [
+    "$SUBSYSTEM_DIR/number_identity/number_location/include",
+    "$SUBSYSTEM_DIR/number_identity/utils/log/include",
+  ]
+
+  external_deps = [
+    "ability_base:base",
+    "ability_base:want",
+    "ability_base:zuri",
+    "ability_runtime:ability_manager",
+    "ability_runtime:abilitykit_native",
+    "ability_runtime:app_context",
+    "ability_runtime:data_ability_helper",
+    "ability_runtime:dataobs_manager",
+    "ability_runtime:napi_base_context",
+    "c_utils:utils",
+    "data_share:datashare_common",
+    "data_share:datashare_consumer",
+    "data_share:datashare_provider",
+    "hilog:libhilog",
+    "i18n:intl_util",
+    "ipc:ipc_single",
+    "napi:ace_napi",
+  ]
+  defines = [
+    "NUMBER_IDENTITY_LOG_TAG = \"NumberLocationFuzzTest\"",
+    "LOG_DOMAIN = 0xD001F1A",
+  ]
+
+  cflags = [
+    "-g",
+    "-O0",
+    "-Wno-unused-variable",
+    "-fno-omit-frame-pointer",
+  ]
+  sources = [ "numberlocation_fuzzer.cpp" ]
+}
+
+###############################################################################
+group("fuzztest") {
+  testonly = true
+  deps = []
+  deps += [
+    # deps file
+    ":NumberLocationFuzzTest",
+  ]
+}
+###############################################################################

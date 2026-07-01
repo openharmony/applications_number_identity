@@ -1,0 +1,89 @@
+# Copyright (C) 2022 Huawei Device Co., Ltd.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import("//build/test.gni")
+
+ohos_unittest("number_identity_yellow_page_gtest") {
+  install_enable = true
+  subsystem_name = "telephony"
+  part_name = "number_identity"
+  test_module = "NumberIdentity"
+  test_suite = "number_identity_yellow_page_gtest"
+  module_out_path = part_name + "/" + test_module + "/" + test_suite
+
+  sources = [
+    "src/yellow_page_parser_gtest.cpp",
+  ]
+
+  deps = [
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/frameworks/js:numberlookup",
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/frameworks/js:numberidentity",
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity:number_identity",
+  ]
+
+  include_dirs = [
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/shared/include",
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/number_location/include",
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/yellow_page/include",
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/interfaces/innerkits",
+    "//vendor/huawei/base/telephony/call_enhanced/number_identity/utils/log/include",
+  ]
+
+  external_deps = [
+    "ability_base:base",
+    "eventhandler:libeventhandler",
+    "init:libbegetutil",
+    "ability_base:want",
+    "ability_base:zuri",
+    "ability_runtime:ability_manager",
+    "ability_runtime:abilitykit_native",
+    "ability_runtime:app_context",
+    "ability_runtime:data_ability_helper",
+    "ability_runtime:dataobs_manager",
+    "ability_runtime:napi_base_context",
+    "bundle_framework:appexecfwk_core",
+    "c_utils:utils",
+    "call_manager:tel_call_manager_api",
+    "common_event_service:cesfwk_innerkits",
+    "core_service:libtel_common",
+    "core_service:tel_core_service_api",
+    "data_share:datashare_common",
+    "data_share:datashare_consumer",
+    "data_share:datashare_provider",
+    "hdf_core:libhdf_utils",
+    "hdf_core:libhdi",
+    "hilog:libhilog",
+    "i18n:intl_util",
+    "ipc:ipc_single",
+    "location:lbsservice_common",
+    "location:locator_sdk",
+    "kv_store:distributeddata_inner",
+    "napi:ace_napi",
+    "relational_store:native_rdb",
+    "relational_store:rdb_data_share_adapter",
+    "googletest:gtest_main",
+    "cJSON:cjson",
+    "protobuf:protobuf_lite_static",
+  ]
+
+  defines = [
+    "NUMBER_IDENTITY_LOG_TAG = \"NumberIdentityYellowPageGest\"",
+    "LOG_DOMAIN = 0xD001F1A",
+    "NUMBER_IDENTITY_DEBUG",
+  ]
+}
+
+group("unittest") {
+  testonly = true
+  deps = [ ":number_identity_yellow_page_gtest" ]
+}

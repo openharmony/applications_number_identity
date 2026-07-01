@@ -1,0 +1,62 @@
+/*
+ * Copyright (c) Huawei Technologies Co., Ltd. 2023. All rights reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef NUMBER_IDENTITY_ERRORS_H
+#define NUMBER_IDENTITY_ERRORS_H
+
+#include <errors.h>
+
+namespace OHOS {
+namespace Telephony {
+enum {
+    TELEPHONY_NUMBER_IDENTITY = 0x21,
+};
+
+// Error code for common
+constexpr ErrCode NUMBER_IDENTITY_ERR_OFFSET = ErrCodeOffset(SUBSYS_TELEPONY, TELEPHONY_NUMBER_IDENTITY);
+
+enum {
+    NUMBER_IDENTITY_ERR_SUCCESS = 0,
+    NUMBER_IDENTITY_ERROR,
+    NUMBER_IDENTITY_ERR_FAIL = NUMBER_IDENTITY_ERR_OFFSET,
+    NUMBER_IDENTITY_ERR_ARGUMENT_MISMATCH,
+    NUMBER_IDENTITY_ERR_ARGUMENT_INVALID,
+    NUMBER_IDENTITY_ERR_ARGUMENT_NULL,
+    NUMBER_IDENTITY_ERR_MEMCPY_FAIL,
+    NUMBER_IDENTITY_ERR_MEMSET_FAIL,
+    NUMBER_IDENTITY_ERR_STRCPY_FAIL,
+    NUMBER_IDENTITY_ERR_LOCAL_PTR_NULL,
+    NUMBER_IDENTITY_ERR_PERMISSION_ERR,
+    NUMBER_IDENTITY_ERR_DESCRIPTOR_MISMATCH,
+    NUMBER_IDENTITY_ERR_WRITE_DESCRIPTOR_TOKEN_FAIL,
+    NUMBER_IDENTITY_ERR_WRITE_DATA_FAIL,
+    NUMBER_IDENTITY_ERR_WRITE_REPLY_FAIL,
+    NUMBER_IDENTITY_ERR_READ_DATA_FAIL,
+    NUMBER_IDENTITY_ERR_ADD_DEATH_RECIPIENT_FAIL,
+    NUMBER_IDENTITY_ERR_UNINIT,
+    NUMBER_IDENTITY_ERR_SLOTID_INVALID,
+    NUMBER_IDENTITY_ERR_STRTOINT_FAIL,
+    NUMBER_IDENTITY_ERR_DATABASE_WRITE_FAIL,
+    NUMBER_IDENTITY_ERR_DATABASE_READ_FAIL,
+    NUMBER_IDENTITY_ERR_ILLEGAL_USE_OF_SYSTEM_API,
+    NUMBER_IDENTITY_ERR_HTTP_FAIL,
+    NUMBER_IDENTITY_ERR_ALREADY_NEW_VERSION,
+    NUMBER_IDENTITY_ERR_CONNECT_FAILED,
+    NUMBER_IDENTITY_ERR_WORK_NOT_EXIST = 970000402,
+    NUMBER_IDENTITY_ERR_ADD_REPEAT_WORK = 970000501,
+};
+} // namespace Telephony
+} // namespace OHOS
+#endif // NUMBER_IDENTITY_ERRORS_H
