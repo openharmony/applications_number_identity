@@ -1,0 +1,3 @@
+# applications_number_identity
+
+OpenHarmony电话子系统号码识别组件，为系统提供号码归属地查询、号码标记（来电识别）服务、来电信息查询扩展能力，以及相关数据存储与DataShare服务。
