@@ -1,0 +1,23 @@
+{
+  "allowToBackupRestore": true,
+  "supportScene": "next2next,hmos2next",
+  "includes": [
+    "data/storage/el1/database/rdb/calls.db",
+    "data/storage/el1/database/rdb/calls.db-shm",
+    "data/storage/el1/database/rdb/calls.db-wal",
+    "data/storage/el1/database/rdb/blocklist.db",
+    "data/storage/el1/database/rdb/blocklist.db-shm",
+    "data/storage/el1/database/rdb/blocklist.db-wal",
+    "data/storage/el2/database/contactsdata/next2hmos/contact.db",
+    "data/storage/el2/database/contactsdata/next2hmos/contact.db-shm",
+    "data/storage/el2/database/contactsdata/next2hmos/contact.db-wal",
+    "data/storage/el2/database/contactsdata/next2hmos/callslog.db",
+    "data/storage/el2/database/contactsdata/next2hmos/callslog.db-shm",
+    "data/storage/el2/database/contactsdata/next2hmos/callslog.db-wal",
+    "data/storage/el2/database/rdb/contacts.db",
+    "data/storage/el2/database/rdb/contacts.db-shm",
+    "data/storage/el2/database/rdb/contacts.db-wal",
+    "data/storage/el2/database/contactsdata/photo/"
+  ],
+  "fullBackupOnly": true
+}

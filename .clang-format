@@ -1,0 +1,17 @@
+---
+# We'll use defaults from the LLVM style, but with 4 columns indentation.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 120
+BreakBeforeBraces: Custom
+InsertBraces: true
+BraceWrapping:
+    AfterFunction: true
+    AfterNamespace: false
+Cpp11BracedListStyle: false
+AlignAfterOpenBracket: DontAlign
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Never
+IndentCaseLabels: true
+IndentCaseBlocks: true
+PenaltyExcessCharacter: 100000000
