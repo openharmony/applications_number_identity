@@ -118,10 +118,12 @@ Internally the component is organized by product / feature / common capabilities
 
 Number Identity supports dual build systems: standalone Hvigor HAP build, and system GN integration for HAP + shared library + prebuilt data.
 
+The following diagram lists all source modules, HAP, native / NAPI shared libraries, extension loaders, and prebuilt data referenced by the `bundle.json` build groups. No standalone HAR is defined.
+
 ![Number Identity build and deploy](./figures/numberidentity_build_en.png)
 
 ### Environment Requirements
-- OpenHarmony / HarmonyOS SDK (the standalone HAP project uses `compileSdkVersion` 23 and `compatibleSdkVersion` / `targetSdkVersion` 20)
+- OpenHarmony SDK (the standalone HAP project uses `compileSdkVersion` 23 and `compatibleSdkVersion` / `targetSdkVersion` 20)
 - OpenHarmony source tree (component path: `base/telephony/number_identity`)
 - DevEco Studio or Hvigor; system GN toolchain
 - Signing configuration for the system-source build (see `signature/pm.gni`; certificates and profiles are supplied by the product build environment)
@@ -146,11 +148,15 @@ hvigorw assembleHap
 
 ### Build Outputs
 
-| Output | Description |
-| ---- | ---- |
-| NumberIdentity.hap | entry module package; the system GN configuration installs it to `/system/app/com.ohos.numberidentityability` |
-| libnumber_identity.so | Feature + common shared library |
-| etc telephony data | `etc/` prebuilt data installed to `/system/etc/telephony/` |
+| Type | Output / GN target | Description |
+| ---- | ------------------ | ----------- |
+| HAP | `NumberIdentity.hap` (target `NumberIdentity`) | entry module installed to `/system/app/com.ohos.numberidentityability` |
+| Native shared library | `number_identity` | Core number-location, number-mark, yellow-page, and shared RDB implementation |
+| NAPI shared libraries | `numberlookup`, `numberidentity` | Installed to `module/contact` and `module/telephony`, respectively |
+| CallerInfoQuery libraries | `caller_info_query_extension`, `caller_info_query_extension_module` | Extension framework and `extensionability/` loader |
+| CallerInfoQuery NAPI | `callerinfoqueryextensionability_napi`, `callerinfoqueryextensioncontext_napi` | Ability and Context JS/NAPI modules |
+| Prebuilt data | `numberlocation.data`, `yellowpage.data` | Installed to `/system/etc/telephony/` |
+| HAR | None | No `ohos_har` or HAR module is defined; public capabilities are provided through native libraries and NAPI |
 
 `bundle.json` declares ownership under the telephony subsystem. Build groups include `fwk_group` (NAPI / extension / etc) and `service_group` (HAP / so).
 
@@ -167,10 +173,45 @@ Typical scenarios: add local query dimensions, extend CallerInfoQuery, or custom
 2. Route via `NumberIdentityDataShareStubImpl` URI dispatch.
 3. Wrap results with Bridge classes.
 
+The existing Stub routes each URI to one of three local DataShare abilities:
+
+```cpp
+std::shared_ptr<DataShareExtAbility>
+NumberIdentityDataShareStubImpl::GetOwner(const Uri &uri)
+{
+    OHOS::Uri uriTemp = uri;
+    std::string path = uriTemp.GetPath();
+    if (path.find("com.ohos.numberlocationability") != std::string::npos) {
+        return GetNumberLocationAbility();
+    }
+    if (path.find("com.ohos.downloadfileability") != std::string::npos) {
+        return GetDownloadFileAbility();
+    }
+    if (path.find("com.ohos.numbermarkability") != std::string::npos) {
+        return GetNumberMarkAbility();
+    }
+    return nullptr;
+}
+```
+
 **Adding NAPI APIs**
 1. Register new APIs under `frameworks/js`.
 2. Access the corresponding URI through `DataShareHelper`.
 3. Update type declarations in `interfaces/`.
+
+The same interfaces are registered under two module names for Telephony and Contacts:
+
+```cpp
+static napi_module g_nativeNumberIdentityModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "telephony.numberidentity",
+};
+
+static napi_module g_nativeNumberLookupModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "contact.numberlookup",
+};
+```
 
 **Extending CallerInfoQuery**
 1. Implement `CallerInfoQueryExtensionAbility` in a third-party app.
@@ -185,6 +226,20 @@ Typical scenarios: add local identification dimensions, data-file update strateg
 2. For new DataShare URIs, update StubImpl routing and `module.json5`.
 3. For external exposure, update `interfaces/` and NAPI registration.
 4. Add gtest / fuzz coverage under `test/`.
+
+For example, a new DataShare capability must declare its type, URI, and access permissions:
+
+```json
+{
+  "name": "NumberMarkAbility",
+  "srcEntry": "./ets/DataShareExtAbility/DataShareExtAbility.ts",
+  "readPermission": "ohos.permission.GET_TELEPHONY_STATE",
+  "writePermission": "ohos.permission.SET_TELEPHONY_STATE",
+  "type": "dataShare",
+  "uri": "datashare://com.ohos.numbermarkability",
+  "visible": true
+}
+```
 
 ## Directory
 ```text

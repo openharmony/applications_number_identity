@@ -118,10 +118,12 @@ CallUI / Contacts / NAPI
 
 Number Identity 支持双构建体系：Hvigor 独立构建 HAP，以及系统 GN 合入构建 HAP + 共享库 + 预置数据。
 
+下图完整列出 `bundle.json` 构建分组涉及的源码模块、HAP、原生 / NAPI 共享库、扩展加载模块和预置数据；本工程没有独立 HAR。
+
 ![Number Identity 编译部署](./figures/numberidentity_build.png)
 
 ### 环境要求
-- OpenHarmony / HarmonyOS SDK（独立 HAP 工程的 `compileSdkVersion` 为 23，`compatibleSdkVersion` / `targetSdkVersion` 为 20）
+- OpenHarmony SDK（独立 HAP 工程的 `compileSdkVersion` 为 23，`compatibleSdkVersion` / `targetSdkVersion` 为 20）
 - OpenHarmony 系统源码树（部件路径：`base/telephony/number_identity`）
 - DevEco Studio 或命令行 Hvigor；系统 GN 工具链
 - 系统源码构建所需签名配置（见 `signature/pm.gni`；证书与 profile 由产品构建环境提供）
@@ -146,11 +148,15 @@ hvigorw assembleHap
 
 ### 构建产物
 
-| 产物 | 说明 |
-| ---- | ---- |
-| NumberIdentity.hap | entry 模块打包；系统 GN 配置安装至 `/system/app/com.ohos.numberidentityability` |
-| libnumber_identity.so | 特性层 + 公共能力层共享库 |
-| etc telephony data | `etc/` 预置数据安装至 `/system/etc/telephony/` |
+| 类型 | 产物 / GN 目标 | 说明 |
+| ---- | -------------- | ---- |
+| HAP | `NumberIdentity.hap`（目标 `NumberIdentity`） | entry 模块；安装至 `/system/app/com.ohos.numberidentityability` |
+| 原生共享库 | `number_identity` | 归属地、号码标记、黄页与 shared RDB 核心实现 |
+| NAPI 共享库 | `numberlookup`、`numberidentity` | 分别安装至 `module/contact`、`module/telephony` |
+| CallerInfoQuery 共享库 | `caller_info_query_extension`、`caller_info_query_extension_module` | 扩展框架及 `extensionability/` 加载模块 |
+| CallerInfoQuery NAPI | `callerinfoqueryextensionability_napi`、`callerinfoqueryextensioncontext_napi` | Ability 与 Context JS/NAPI 模块 |
+| 预置数据 | `numberlocation.data`、`yellowpage.data` | 安装至 `/system/etc/telephony/` |
+| HAR | 无 | 工程未定义 `ohos_har` / HAR 模块；对外能力通过原生共享库与 NAPI 提供 |
 
 `bundle.json` 声明部件归属 telephony 子系统，构建分组包含 `fwk_group`（NAPI / 扩展 / etc）与 `service_group`（HAP / so）。
 
@@ -167,10 +173,45 @@ Number Identity 采用 **ArkTS + C++** 混合开发，DataShare 核心逻辑在 
 2. 通过 `NumberIdentityDataShareStubImpl` 的 URI 路由分发到目标 Ability。
 3. 使用 Bridge 类封装返回结果。
 
+现有路由中，Stub 根据 URI 将请求交给三个本地 DataShare Ability：
+
+```cpp
+std::shared_ptr<DataShareExtAbility>
+NumberIdentityDataShareStubImpl::GetOwner(const Uri &uri)
+{
+    OHOS::Uri uriTemp = uri;
+    std::string path = uriTemp.GetPath();
+    if (path.find("com.ohos.numberlocationability") != std::string::npos) {
+        return GetNumberLocationAbility();
+    }
+    if (path.find("com.ohos.downloadfileability") != std::string::npos) {
+        return GetDownloadFileAbility();
+    }
+    if (path.find("com.ohos.numbermarkability") != std::string::npos) {
+        return GetNumberMarkAbility();
+    }
+    return nullptr;
+}
+```
+
 **新增 NAPI 接口**
 1. 在 `frameworks/js` 中注册新接口。
 2. 内部通过 `DataShareHelper` 访问对应 URI。
 3. 更新 `interfaces/` 中的类型声明。
+
+同一套接口以两个模块名注册，分别供 Telephony 与 Contacts 使用：
+
+```cpp
+static napi_module g_nativeNumberIdentityModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "telephony.numberidentity",
+};
+
+static napi_module g_nativeNumberLookupModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "contact.numberlookup",
+};
+```
 
 **扩展 CallerInfoQuery**
 1. 第三方应用实现 `CallerInfoQueryExtensionAbility`。
@@ -185,6 +226,20 @@ Number Identity 采用 **ArkTS + C++** 混合开发，DataShare 核心逻辑在 
 2. 如需新 DataShare URI，同步更新 StubImpl 路由与 `module.json5` 声明。
 3. 如需对外暴露，补充 `interfaces/` 与 NAPI 注册。
 4. 在 `test/` 中补充 gtest / fuzz 用例。
+
+例如，新增 DataShare 能力时需要同步声明类型、URI 与访问权限：
+
+```json
+{
+  "name": "NumberMarkAbility",
+  "srcEntry": "./ets/DataShareExtAbility/DataShareExtAbility.ts",
+  "readPermission": "ohos.permission.GET_TELEPHONY_STATE",
+  "writePermission": "ohos.permission.SET_TELEPHONY_STATE",
+  "type": "dataShare",
+  "uri": "datashare://com.ohos.numbermarkability",
+  "visible": true
+}
+```
 
 ## 目录
 ```text
