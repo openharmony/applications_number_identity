@@ -27,12 +27,12 @@ This is a preinstalled system component, deployed as a **system HAP plus native 
 
 **Caller Info Query Extension**
 - `CallerInfoQueryExtensionAbility` supports third-party extensions for enterprise caller info.
-- Extension declarations and Context types are exposed via `interfaces/kits/`.
+- `interfaces/kits/` provides the `CallerInfoQueryExtensionAbility` JavaScript base class and the `CallerInfoQueryExtensionContext` wrapper module.
 
 **Data Update and Lifecycle**
 - `DownloadFileWorkSheduler` periodically downloads number-location / yellow-page data files according to the configured network policy. Downloaded data is stored locally; identification queries do not make online requests.
 - `NumberIdentityServiceExtAbility` supports IPC import of number-mark packages.
-- `BackupExtension` provides backup/restore; RDB upgrades migrate automatically.
+- The project declares an empty `BackupExtension`. Its current `backup_config.json` lists call/contact data and does not include `number_identity.db`; Number Identity's own RDB schema upgrades are handled by database callbacks.
 
 ### Relationship with CallUI and Contacts
 
@@ -61,38 +61,31 @@ Number Identity sits in the application / data-service layer. It provides number
 
 ### Layered Design
 
-The overall design can be divided into a product layer (entry HAP), a feature layer (location / mark / yellow page), and a common layer (RDB / NAPI / prebuilt data), as shown below:
+Number Identity overall adopts a layered and modular architecture design, divided into three layers:
 
-![Number Identity layered architecture](./figures/numberidentity_architecture_en.png)
+- Common capability layer (`shared/`, `etc/`, `utils/`, `frameworks/`, `interfaces/`): basic management framework and common utilities
+- Feature layer (`number_location/`, `number_mark/`, `yellow_page/`): modular business features
+- Product layer (`entry/`): product adaptation
 
-| Layer | Main directories / components | Description |
-| ---- | --------------- | ---- |
-| Product / application entry | `entry/` | HAP packaging, ArkTS placeholder page, ServiceExtension, DataShare declarations, backup extension |
-| Feature / number-identity business | `number_location/`, `number_mark/`, `yellow_page/` | Location parsing, mark query and maintenance, yellow-page import, data download |
-| Common / base capabilities | `shared/`, `etc/`, `utils/`, `frameworks/`, `interfaces/` | RDB, prebuilt data, logging, NAPI, CallerInfoQuery extension and type definitions |
+**Basic principle**: Layers are divided by the reusability of module capabilities; each layer is divided by the business boundaries between modules.
 
-### Ability and Data Service Scenes
+**Responsibilities**
+1. Common capability layer:
+    - Hosts: the base capability set required for Number Identity to run.
+    - Note: `shared/` is the base framework for RDB, data models, and common utilities, and is the required foundational module of Number Identity.
+    - Common business contained in feature-layer modules can also sink into the common capability layer. For example, DFX utilities (logging, and so on), prebuilt data (`etc/`), and NAPI and CallerInfoQuery extensions (`frameworks/`, `interfaces/`) that need to be reused across multiple features are placed in the common capability layer;
 
-Consumers enter via DataShare / NAPI. StubImpl routes to the corresponding Ability, which accesses RDB and prebuilt data:
+2. Feature layer:
+    - Hosts: a collection of abstract common features; each feature is highly cohesive and loosely coupled, and supports customization by the product layer.
+    - Based on local number-identity businesses (location query, number mark, yellow-page recognition, and so on), capabilities are split into different modules by business boundary and placed in the feature layer;
 
-![Number Identity Ability and data service scenes](./figures/numberidentity_ability_en.png)
+3. Product layer:
+    - Hosts: personalized businesses for the current device, and customization of the required feature layer and common capability layer.
+    - Common capabilities and different features are integrated and customized by the product-layer main entry, and packaged into a directly deployable HAP package.
 
-**Data flow overview**:
-
-```text
-CallUI / Contacts / NAPI
-  → DataShare Helper / getNumberLocation
-  → NumberIdentityDataShareStubImpl
-  → NumberLocationAbility / NumberMarkAbility / DownloadFileAbility
-  → shared RDB + etc prebuilt data
-  → ResultSet / NumberMarkInfo return
-```
-
-### Component and External Dependencies
-
-Internally the component is organized by product / feature / common capabilities. Cross-process collaboration uses DataShare, NAPI, the Settings service, and the file system:
-
-![Number Identity component and IPC](./figures/numberidentity_ipc_en.png)
+**Relationships**
+1. Neither the common capability layer nor the feature layer can be deployed or run directly; they must be integrated by the product layer and built into a HAP package before they can run.
+2. The product layer may depend downward on the feature layer and the common capability layer; the feature layer may depend downward on the common capability layer. The dependency direction is top-down; reverse dependencies are not allowed.
 
 ### Module Description
 
@@ -103,7 +96,7 @@ Internally the component is organized by product / feature / common capabilities
 | Domain service | entry/src/main/ets/service/ | NumberIdentityServiceExtAbility IPC service |
 | DataShare declarations | entry/src/main/ets/DataShareExtAbility/ | TS placeholders; real logic in C++ |
 | Data update scheduler | entry/src/main/ets/DataShareExtAbility/DownloadFileWorkSheduler.ts | Triggers local data-file downloads and updates according to the network policy |
-| Backup extension | entry/src/main/ets/backup/ | BackupExtension |
+| Backup extension | entry/src/main/ets/backup/ | Empty BackupExtension; scope is defined by backup_config.json |
 | Number location | number_location/ | Manager, Parser, Ability, DownloadFile |
 | Number mark | number_mark/ | NumberMarkAbility, CallerInfo, mark query and maintenance |
 | Yellow page | yellow_page/ | YellowPageParser data import |
@@ -197,7 +190,7 @@ NumberIdentityDataShareStubImpl::GetOwner(const Uri &uri)
 **Adding NAPI APIs**
 1. Register new APIs under `frameworks/js`.
 2. Access the corresponding URI through `DataShareHelper`.
-3. Update type declarations in `interfaces/`.
+3. Update innerkits / Kit interface implementations under `interfaces/` as needed.
 
 The same interfaces are registered under two module names for Telephony and Contacts:
 
@@ -218,16 +211,39 @@ static napi_module g_nativeNumberLookupModule = {
 2. Return enterprise caller info in `onQueryCallerInfo(number)`.
 3. The system invokes it through the `CallerInfoQueryExtension` framework over IPC.
 
+The base class lives under `interfaces/kits/caller_info_query_extension_ability/`. Third-party apps can implement query logic based on this base class:
+
+```javascript
+class CallerInfoQueryExtensionAbility {
+  async onQueryCallerInfo(number) {
+    console.log('onQueryCallerInfo:' + number);
+  }
+}
+
+export default CallerInfoQueryExtensionAbility;
+```
+
 ### Developing New Features
 
 Typical scenarios: add local identification dimensions, data-file update strategies, or external Kits.
 
-1. Add/extend C++ modules in the feature layer and update `BUILD.gn`.
-2. For new DataShare URIs, update StubImpl routing and `module.json5`.
-3. For external exposure, update `interfaces/` and NAPI registration.
-4. Add gtest / fuzz coverage under `test/`.
+**Step 1: Extend C++ feature modules**
 
-For example, a new DataShare capability must declare its type, URI, and access permissions:
+Add or extend implementations in the feature layer, and register sources in the root `BUILD.gn` `number_identity` shared library:
+
+```gn
+ohos_shared_library("number_identity") {
+  sources = [
+    # ... existing sources ...
+    "$NUMBER_IDENTITY_ROOT/number_location/src/number_location_parser.cpp",
+    # "$NUMBER_IDENTITY_ROOT/<new_feature>/src/<new_module>.cpp",
+  ]
+}
+```
+
+**Step 2: Declare DataShare routing and permissions**
+
+For new DataShare URIs, update `NumberIdentityDataShareStubImpl::GetOwner` routing and `module.json5`. For example, a new capability must declare its type, URI, and access permissions:
 
 ```json
 {
@@ -238,6 +254,36 @@ For example, a new DataShare capability must declare its type, URI, and access p
   "type": "dataShare",
   "uri": "datashare://com.ohos.numbermarkability",
   "visible": true
+}
+```
+
+**Step 3: Expose external APIs**
+
+For external exposure, update `interfaces/` and NAPI registration under `frameworks/js`. Register the same interfaces under both Telephony and Contacts module names:
+
+```cpp
+static napi_module g_nativeNumberIdentityModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "telephony.numberidentity",
+};
+
+static napi_module g_nativeNumberLookupModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "contact.numberlookup",
+};
+```
+
+**Step 4: Add tests**
+
+Add gtest cases under `test/unittest/` and register the sources in the corresponding `BUILD.gn`:
+
+```gn
+ohos_unittest("tel_number_location_gtest") {
+  sources = [
+    "src/number_location_gtest.cpp",
+    "src/number_location_ability_gtest.cpp",
+    # "src/<new_feature>_gtest.cpp",
+  ]
 }
 ```
 
@@ -256,7 +302,7 @@ number_identity
 │  │  │  ├─service/                     # NumberIdentityServiceExtAbility
 │  │  │  ├─pages/                       # ArkTS placeholder (currently an empty page skeleton)
 │  │  │  ├─common/                      # Constants, logging, connection helpers
-│  │  │  └─backup/                      # BackupExtension restore support
+│  │  │  └─backup/                      # Empty BackupExtension
 │  │  ├─resources/                      # Module resources, multi-language, and so on
 │  │  ├─module.json                     # Module profile used by the system GN build
 │  │  └─module.json5                    # Ability, permission, and DataShare declarations used by Hvigor
@@ -273,12 +319,10 @@ number_identity
 ├─figures/                              # Architecture diagrams
 │  ├─numberidentity_in_os.png           # Position in the system (zh)
 │  ├─numberidentity_architecture.png    # Layered architecture (zh)
-│  ├─numberidentity_ability.png         # Ability and data-service scenes (zh)
 │  ├─numberidentity_ipc.png             # Component and external dependencies (zh)
 │  ├─numberidentity_build.png           # Build and deployment (zh)
 │  ├─numberidentity_in_os_en.png        # Position in the system (en)
 │  ├─numberidentity_architecture_en.png # Layered architecture (en)
-│  ├─numberidentity_ability_en.png      # Ability and data-service scenes (en)
 │  ├─numberidentity_ipc_en.png          # Component and external dependencies (en)
 │  └─numberidentity_build_en.png        # Build and deployment (en)
 ├─test/                                 # gtest / fuzztest

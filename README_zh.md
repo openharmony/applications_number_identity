@@ -27,12 +27,12 @@
 
 **来电信息查询扩展**
 - `CallerInfoQueryExtensionAbility` 框架支持第三方应用扩展企业来电信息查询。
-- 通过 `interfaces/kits/` 对外暴露 Extension 声明与 Context 类型。
+- 通过 `interfaces/kits/` 提供 `CallerInfoQueryExtensionAbility` JS 基类与 `CallerInfoQueryExtensionContext` 包装模块。
 
 **数据更新与生命周期**
 - `DownloadFileWorkSheduler` 按网络策略定时下载归属地 / 黄页数据文件；下载完成后写入本地文件或数据库，识别查询不发起在线请求。
 - `NumberIdentityServiceExtAbility` 支持号码标记数据包 IPC 导入。
-- `BackupExtension` 提供备份恢复扩展；RDB 版本升级自动迁移。
+- 工程声明了空实现的 `BackupExtension`，其 `backup_config.json` 当前列出的是通话 / 联系人数据，未包含 `number_identity.db`；Number Identity 自身的 RDB 版本升级由数据库回调迁移。
 
 ### Number Identity 与 CallUI / Contacts 的关系
 
@@ -61,38 +61,31 @@ Number Identity 位于应用 / 数据服务层，通过 DataShare 与 NAPI 向 C
 
 ### 分层设计
 
-整体可划分为产品层（entry HAP）、特性层（归属地 / 标记 / 黄页）、公共层（RDB / NAPI / 预置数据），如图：
+Number Identity 整体采用分层和模块化架构设计，分为三层：
 
-![Number Identity 分层架构](./figures/numberidentity_architecture.png)
+- 公共能力层（`shared/`、`etc/`、`utils/`、`frameworks/`、`interfaces/`）：基础管理框架、通用工具相关
+- 特性层（`number_location/`、`number_mark/`、`yellow_page/`）：模块化业务功能相关
+- 产品层（`entry/`）：产品适配相关
 
-| 层次 | 主要目录 / 组件 | 说明 |
-| ---- | --------------- | ---- |
-| 产品层 / 应用入口 | `entry/` | HAP 打包、ArkTS 占位页、ServiceExtension、DataShare 声明、备份扩展 |
-| 特性层 / 号码识别业务 | `number_location/`、`number_mark/`、`yellow_page/` | 归属地解析、标记查询与维护、黄页导入、数据下载 |
-| 公共层 / 基础能力 | `shared/`、`etc/`、`utils/`、`frameworks/`、`interfaces/` | RDB、预置数据、日志、NAPI、CallerInfoQuery 扩展与类型定义 |
+**基本原则**：层与层之间按照模块功能的可复用程度进行划分，每一层按照模块间的业务边界划分。
 
-### Ability 与数据服务场景
+**职责**
+1. 公共能力层：
+    - 承载：Number Identity 运行所需的基础能力集。
+    - 注意：`shared/` 是 RDB、数据模型与公共工具的基础框架，是 Number Identity 必选的最基础模块。
+    - 特性层各个模块包含的公共业务，也可以下沉到公共能力层。例如：DFX 工具（日志等）、预置数据（`etc/`）、NAPI 与 CallerInfoQuery 扩展（`frameworks/`、`interfaces/`）等需要跨多个特性复用的模块，放置在公共能力层；
 
-消费方经 DataShare / NAPI 进入，由 StubImpl 路由到对应 Ability，再访问 RDB 与预置数据：
+2. 特性层：
+    - 承载：抽象的公共特性的集合，每个特性高内聚、低耦合，且支持产品层进行定制。
+    - 基于本地号码识别业务（归属地查询、号码标记、黄页识别等）按照业务边界拆分成不同的模块，放置在特性层；
 
-![Number Identity Ability 与数据服务场景](./figures/numberidentity_ability.png)
+3. 产品层：
+    - 承载：针对当前设备的个性化业务、以及对所需特性层和公共能力层的定制。
+    - 公共能力和不同特性又由产品层的主入口进行集成和定制，打包为可直接部署的 HAP 包。
 
-**数据流概览**：
-
-```text
-CallUI / Contacts / NAPI
-  → DataShare Helper / getNumberLocation
-  → NumberIdentityDataShareStubImpl
-  → NumberLocationAbility / NumberMarkAbility / DownloadFileAbility
-  → shared RDB + etc 预置数据
-  → ResultSet / NumberMarkInfo 回传
-```
-
-### 部件与外部依赖
-
-部件内部按产品 / 特性 / 公共能力组织，通过 DataShare、NAPI、Settings 服务和文件系统完成跨进程协作：
-
-![Number Identity 部件与 IPC](./figures/numberidentity_ipc.png)
+**关系**
+1. 公共能力层和特性层，均无法直接部署和运行，需要由产品层集成后编译出 HAP 包，才能运行。
+2. 产品层可以向下依赖特性层和公共能力层，特性层可以向下依赖公共能力层，依赖方向自上而下，不允许反向依赖。
 
 ### 模块说明
 
@@ -103,7 +96,7 @@ CallUI / Contacts / NAPI
 | 领域服务 | entry/src/main/ets/service/ | NumberIdentityServiceExtAbility IPC 服务 |
 | DataShare 声明 | entry/src/main/ets/DataShareExtAbility/ | TS 占位；实际逻辑在 C++ 层 |
 | 数据更新调度 | entry/src/main/ets/DataShareExtAbility/DownloadFileWorkSheduler.ts | 按网络策略触发本地数据文件下载与更新 |
-| 备份扩展 | entry/src/main/ets/backup/ | BackupExtension |
+| 备份扩展 | entry/src/main/ets/backup/ | 空实现 BackupExtension；范围由 backup_config.json 配置 |
 | 号码归属地 | number_location/ | Manager、Parser、Ability、DownloadFile |
 | 号码标记 | number_mark/ | NumberMarkAbility、CallerInfo、标记查询与维护 |
 | 黄页解析 | yellow_page/ | YellowPageParser 数据导入 |
@@ -197,7 +190,7 @@ NumberIdentityDataShareStubImpl::GetOwner(const Uri &uri)
 **新增 NAPI 接口**
 1. 在 `frameworks/js` 中注册新接口。
 2. 内部通过 `DataShareHelper` 访问对应 URI。
-3. 更新 `interfaces/` 中的类型声明。
+3. 按需更新 `interfaces/` 中的 innerkits / Kit 接口实现。
 
 同一套接口以两个模块名注册，分别供 Telephony 与 Contacts 使用：
 
@@ -218,16 +211,39 @@ static napi_module g_nativeNumberLookupModule = {
 2. 在 `onQueryCallerInfo(number)` 回调中返回企业来电信息。
 3. 系统通过 `CallerInfoQueryExtension` 框架 IPC 调用。
 
+基类位于 `interfaces/kits/caller_info_query_extension_ability/`，第三方应用可基于该基类实现查询逻辑：
+
+```javascript
+class CallerInfoQueryExtensionAbility {
+  async onQueryCallerInfo(number) {
+    console.log('onQueryCallerInfo:' + number);
+  }
+}
+
+export default CallerInfoQueryExtensionAbility;
+```
+
 ### 新特性开发
 
 适用场景：新增本地识别维度、补充数据文件更新策略、扩展对外 Kit。
 
-1. 在特性层目录新增 / 扩展 C++ 模块，并更新 `BUILD.gn`。
-2. 如需新 DataShare URI，同步更新 StubImpl 路由与 `module.json5` 声明。
-3. 如需对外暴露，补充 `interfaces/` 与 NAPI 注册。
-4. 在 `test/` 中补充 gtest / fuzz 用例。
+**步骤1：扩展 C++ 特性模块**
 
-例如，新增 DataShare 能力时需要同步声明类型、URI 与访问权限：
+在特性层目录新增 / 扩展实现，并在根目录 `BUILD.gn` 的 `number_identity` 共享库中注册源文件：
+
+```gn
+ohos_shared_library("number_identity") {
+  sources = [
+    # ... existing sources ...
+    "$NUMBER_IDENTITY_ROOT/number_location/src/number_location_parser.cpp",
+    # "$NUMBER_IDENTITY_ROOT/<new_feature>/src/<new_module>.cpp",
+  ]
+}
+```
+
+**步骤2：声明 DataShare 路由与权限**
+
+如需新 DataShare URI，同步更新 `NumberIdentityDataShareStubImpl::GetOwner` 路由与 `module.json5` 声明。例如，新增能力时需声明类型、URI 与访问权限：
 
 ```json
 {
@@ -238,6 +254,36 @@ static napi_module g_nativeNumberLookupModule = {
   "type": "dataShare",
   "uri": "datashare://com.ohos.numbermarkability",
   "visible": true
+}
+```
+
+**步骤3：对外暴露接口**
+
+如需对外暴露，补充 `interfaces/` 与 `frameworks/js` 中的 NAPI 注册。同一套接口需同时注册 Telephony 与 Contacts 模块名：
+
+```cpp
+static napi_module g_nativeNumberIdentityModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "telephony.numberidentity",
+};
+
+static napi_module g_nativeNumberLookupModule = {
+    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
+    .nm_modname = "contact.numberlookup",
+};
+```
+
+**步骤4：补充测试**
+
+在 `test/unittest/` 中补充 gtest，并在对应 `BUILD.gn` 中注册用例源文件：
+
+```gn
+ohos_unittest("tel_number_location_gtest") {
+  sources = [
+    "src/number_location_gtest.cpp",
+    "src/number_location_ability_gtest.cpp",
+    # "src/<new_feature>_gtest.cpp",
+  ]
 }
 ```
 
@@ -256,7 +302,7 @@ number_identity
 │  │  │  ├─service/                     # NumberIdentityServiceExtAbility
 │  │  │  ├─pages/                       # ArkTS 占位页（当前为空页面骨架）
 │  │  │  ├─common/                      # 常量、日志、连接工具
-│  │  │  └─backup/                      # BackupExtension 备份恢复
+│  │  │  └─backup/                      # 空实现 BackupExtension
 │  │  ├─resources/                      # 模块资源、多语言等
 │  │  ├─module.json                     # 系统 GN 构建使用的模块配置
 │  │  └─module.json5                    # Hvigor 使用的 Ability、权限、DataShare 声明
@@ -273,12 +319,10 @@ number_identity
 ├─figures/                              # 架构图
 │  ├─numberidentity_in_os.png           # 系统中定位（中文）
 │  ├─numberidentity_architecture.png    # 分层架构（中文）
-│  ├─numberidentity_ability.png         # Ability 与数据服务场景（中文）
 │  ├─numberidentity_ipc.png             # 部件与外部依赖（中文）
 │  ├─numberidentity_build.png           # 编译部署（中文）
 │  ├─numberidentity_in_os_en.png        # 系统中定位（英文）
 │  ├─numberidentity_architecture_en.png # 分层架构（英文）
-│  ├─numberidentity_ability_en.png      # Ability 与数据服务场景（英文）
 │  ├─numberidentity_ipc_en.png          # 部件与外部依赖（英文）
 │  └─numberidentity_build_en.png        # 编译部署（英文）
 ├─test/                                 # gtest / fuzztest
