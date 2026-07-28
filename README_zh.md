@@ -318,12 +318,8 @@ number_identity
 ├─utils/log/                            # 统一日志宏与错误码
 ├─figures/                              # 架构图
 │  ├─numberidentity_in_os.png           # 系统中定位（中文）
-│  ├─numberidentity_architecture.png    # 分层架构（中文）
-│  ├─numberidentity_ipc.png             # 部件与外部依赖（中文）
 │  ├─numberidentity_build.png           # 编译部署（中文）
 │  ├─numberidentity_in_os_en.png        # 系统中定位（英文）
-│  ├─numberidentity_architecture_en.png # 分层架构（英文）
-│  ├─numberidentity_ipc_en.png          # 部件与外部依赖（英文）
 │  └─numberidentity_build_en.png        # 编译部署（英文）
 ├─test/                                 # gtest / fuzztest
 ├─signature/                            # 系统 GN 签名配置（pm.gni）

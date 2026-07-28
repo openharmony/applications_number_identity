@@ -318,12 +318,8 @@ number_identity
 ├─utils/log/                            # Shared log macros and error codes
 ├─figures/                              # Architecture diagrams
 │  ├─numberidentity_in_os.png           # Position in the system (zh)
-│  ├─numberidentity_architecture.png    # Layered architecture (zh)
-│  ├─numberidentity_ipc.png             # Component and external dependencies (zh)
 │  ├─numberidentity_build.png           # Build and deployment (zh)
 │  ├─numberidentity_in_os_en.png        # Position in the system (en)
-│  ├─numberidentity_architecture_en.png # Layered architecture (en)
-│  ├─numberidentity_ipc_en.png          # Component and external dependencies (en)
 │  └─numberidentity_build_en.png        # Build and deployment (en)
 ├─test/                                 # gtest / fuzztest
 ├─signature/                            # System GN signing config (pm.gni)
