@@ -136,7 +136,25 @@ Number Identity 采用 **ArkTS + C++** 混合开发：DataShare 与黄页 / 归�
     ...
 ```
 
-**场景4：添加 / 修改号码黄页 `yellowpage.data`**
+**场景4：写入号码标记数据**
+
+   - 对外写入口为 DataShare `Update`（`Insert` 不支持），URI：`datashare:///com.ohos.numbermarkability/number_mark_info`（需 `SET_TELEPHONY_STATE`）
+   - 实现：`NumberMarkAbility::Update` → `SetNumberMark`（`number_mark_ability.cpp`）
+   - 必填：`phoneNumber`、`markType`；自定义标记另需 `customMarkContent`；`markType` 为 `MARK_TYPE_NONE` 表示删除
+
+例如，写入一条骚扰标记：
+```cpp
+    // number_mark_ability.cpp — SetNumberMark 写入入口
+    Uri uri("datashare:///com.ohos.numbermarkability/number_mark_info");
+    DataShareValuesBucket values;
+    values.Put(SetNumberMarkParamsFields::phoneNumber, "12345678901");
+    values.Put(SetNumberMarkParamsFields::markType, static_cast<int64_t>(MarkType::MARK_TYPE_CRANK));
+    // 【修改点】可改为自定义标记并补充 customMarkContent，或设为 MARK_TYPE_NONE 删除
+    ...
+    ability->Update(uri, predicates, values);
+```
+
+**场景5：添加 / 修改号码黄页 `yellowpage.data`**
 
    - 源文件：`etc/yellowpage.data`
    - 解析：`yellow_page/src/yellow_page_parser.cpp`

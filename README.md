@@ -136,7 +136,25 @@ For example, to add custom handling after a user-mark hit, extend `QueryByPhoneN
     ...
 ```
 
-**Scenario 4: Add / update yellow-page `yellowpage.data`**
+**Scenario 4: Write number mark data**
+
+   - External write entry is DataShare `Update` (`Insert` is not supported); URI: `datashare:///com.ohos.numbermarkability/number_mark_info` (requires `SET_TELEPHONY_STATE`)
+   - Implementation: `NumberMarkAbility::Update` → `SetNumberMark` (`number_mark_ability.cpp`)
+   - Required: `phoneNumber`, `markType`; custom marks also need `customMarkContent`; `markType` of `MARK_TYPE_NONE` means delete
+
+For example, to write a spam mark:
+```cpp
+    // number_mark_ability.cpp — SetNumberMark write entry
+    Uri uri("datashare:///com.ohos.numbermarkability/number_mark_info");
+    DataShareValuesBucket values;
+    values.Put(SetNumberMarkParamsFields::phoneNumber, "12345678901");
+    values.Put(SetNumberMarkParamsFields::markType, static_cast<int64_t>(MarkType::MARK_TYPE_CRANK));
+    // [Change point] switch to a custom mark with customMarkContent, or set MARK_TYPE_NONE to delete
+    ...
+    ability->Update(uri, predicates, values);
+```
+
+**Scenario 5: Add / update yellow-page `yellowpage.data`**
 
    - Source: `etc/yellowpage.data`
    - Parsing: `yellow_page/src/yellow_page_parser.cpp`
