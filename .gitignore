@@ -1,0 +1,17 @@
+*.iml
+.clang-format
+.clang-tidy
+.clangd
+.test/
+build/
+.preview/
+.idea/
+.gradle/
+local.properties
+*.DS_Store
+tsconfig.json
+node_modules/
+.hvigor/
+oh_modules/
+oh-package-lock.json5
+BuildProfile.ets

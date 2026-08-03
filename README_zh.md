@@ -1,249 +1,203 @@
-# Number Identity
+# 号码识别（Number Identity）
 
 ## 简介
-**Number Identity**（包名：`com.ohos.numberidentity`）是 OpenHarmony 电话子系统中的 **号码识别部件**，提供号码归属地查询、号码标记（来电识别）、黄页识别、来电信息查询扩展，以及相关本地数据存储与 DataShare 服务。
 
-本部件为系统预置组件，以 **系统 HAP + 原生共享库** 形式部署。号码标记、号码识别等功能依赖设备端的**本地数据库 / 数据文件**；识别与展示结果均从本地数据库或数据文件读取，**无在线识别功能**。工程中预置数据文件为 **`etc/numberlocation.data`**、**`etc/yellowpage.data`**，设备侧路径为 **`system/etc/telephony/`**。
+**号码识别**（包名：`com.ohos.numberidentity`）是 OpenHarmony 电话子系统中的系统部件，以系统 HAP 与原生共享库形式部署，提供**号码归属地、号码标记与号码黄页**等能力，并向通话、联系人等应用提供 DataShare 数据服务。
 
 ### 核心能力
 
-**号码归属地查询**
-- 基于本地预置 / 更新数据文件（`numberlocation.data` / `numberlocation.dat`）解析，返回省 / 市 / 运营商等信息。
-- 通过 `NumberLocationManager`、`MobilePhoneNumber` 与 `FixPhoneNumber` 实现手机号号段匹配、固话区号匹配及号码格式处理。
-- 对外通过 DataShare URI `com.ohos.numberlocationability` 与 NAPI `getNumberLocation` 暴露。
+**号码归属地**
+- 支持基于本地数据文件 `numberlocation.data`、`numberlocation.dat` 查询号码归属地与运营商信息。
+- 经 `com.ohos.numberlocationability` 对外提供 DataShare 查询服务。
 
-> Number Identity 的定位是电话子系统的数据服务部件，DataShare 核心逻辑在 C++ 层实现，而非纯 ArkTS 应用。
+**号码标记**
+- 支持对陌生号码打标（骚扰、诈骗、广告等）及查询、更新、删除。
+- 数据写入 `number_mark` 相关表，经 `com.ohos.numbermarkability` 对外服务。
 
-**号码标记与黄页识别**
-- 支持用户对陌生号码打标（骚扰、诈骗、广告推销等），写入 `number_mark` 表。
-- 黄页数据通过 `yellow_page` 模块解析 `yellowpage.data` 导入 RDB，优先于社区标记展示。
-- 当前生产查询顺序为本地黄页 → 本地用户标记；`number_identity_switch` 仅控制未命中后的开关判断。工程保留智能库数据导入 / 存储与 HSDR Helper 代码，但尚未接入 `QueryByPhoneNumber` 主查询链路。
-
-**DataShare 数据服务**
-- 统一 `NumberIdentityDataShareStubImpl` 路由三个 DataShare Extension：
-  - `com.ohos.numberlocationability` → 归属地查询
-  - `com.ohos.numbermarkability` → 号码标记查询、更新、删除与批量导入
-  - `com.ohos.downloadfileability` → 数据下载 / 更新
-
-**来电信息查询扩展**
-- `CallerInfoQueryExtensionAbility` 框架支持第三方应用扩展企业来电信息查询。
-- 通过 `interfaces/kits/` 提供 `CallerInfoQueryExtensionAbility` JS 基类与 `CallerInfoQueryExtensionContext` 包装模块。
-
-**数据更新与生命周期**
-- `DownloadFileWorkSheduler` 按网络策略定时下载归属地 / 黄页数据文件；下载完成后写入本地文件或数据库，识别查询不发起在线请求。
-- `NumberIdentityServiceExtAbility` 支持号码标记数据包 IPC 导入。
-- 工程声明了空实现的 `BackupExtension`，其 `backup_config.json` 当前列出的是通话 / 联系人数据，未包含 `number_identity.db`；Number Identity 自身的 RDB 版本升级由数据库回调迁移。
-
-### Number Identity 与 CallUI / Contacts 的关系
-
-Number Identity、CallUI、Contacts 都是电话子系统生态中的部件，CallUI 与 Contacts **消费** Number Identity 提供的数据服务。
-
-**事件与调用关系上**：
-1. Number Identity 以独立应用进程运行，原生 `number_identity` 共享库在进程加载时注册 DataShare 创建器。
-2. CallUI、Contacts 通过 DataShare Helper 或 NAPI 跨进程查询号码信息。
-3. Number Identity 不直接与通话 UI 交互，通过 DataShare / NAPI 提供间接数据服务。
-
-> 例如，一次典型的来电标记展示流程：
-> - CallUI 收到来电事件，获取来电号码；
-> - 通过 DataShare 查询 `com.ohos.numbermarkability`；
-> - `NumberMarkAbility` 按优先级查询黄页 / 标记数据；
-> - 返回 `NumberMarkInfo` 结果集，CallUI 在通话界面展示。
+**号码黄页**
+- 支持解析 `yellowpage.data` 并导入 RDB，查询时匹配黄页记录。
+- 由 `yellow_page/` 模块完成解析，经 `NumberIdentityDatabase::ImportYellowPageData` 入库。
 
 ## 架构说明
 
-Number Identity 采用分层与模块化设计，并与通话 / 联系人等消费方协同工作。
+Number Identity 采用分层与模块化设计，按产品入口、业务特性与公共能力组织代码，如图：
 
-### 在系统中的定位
+![架构说明](./figures/numberidentity.png)
 
-Number Identity 位于应用 / 数据服务层，通过 DataShare 与 NAPI 向 CallUI、Contacts 等提供号码识别能力，依赖 RDB 与预置数据完成本地解析。
+### 应用层分层设计
 
-![Number Identity in OpenHarmony](./figures/numberidentity_in_os.png)
+整体可划分为产品层、特性层、公共层：
 
-### 分层设计
+| 层次   | 主要目录 / 组件 | 说明 |
+|------| -------------- | ---- |
+| 产品层 | `entry`（phone / pad） | 手机 / 平板形态 |
+| 特性层 | `number_location/`、`number_mark/`、`yellow_page/` | 号码归属地、号码标记、号码黄页 |
+| 公共层 | `shared/`、`etc/`、`utils/`、`interfaces/` | 共享数据库、预置数据、日志工具、接口定义 |
 
-Number Identity 整体采用分层和模块化架构设计，分为三层：
+**特性层模块说明**：
 
-- 公共能力层（`shared/`、`etc/`、`utils/`、`frameworks/`、`interfaces/`）：基础管理框架、通用工具相关
-- 特性层（`number_location/`、`number_mark/`、`yellow_page/`）：模块化业务功能相关
-- 产品层（`entry/`）：产品适配相关
+| 核心能力   | 模块 | 说明 |
+|--------|----------------|------|
+| 号码归属地   | `number_location/`（`NumberLocationManager`、`NumberLocationAbility`） | 归属地解析与 DataShare 查询 |
+| 号码标记   | `number_mark/`（`NumberMarkManager`、`NumberMarkAbility`） | 用户标记维护与查询 |
+| 号码黄页   | `yellow_page/`（`YellowPageParser`） | 黄页文件解析与 RDB 导入 |
 
-**基本原则**：层与层之间按照模块功能的可复用程度进行划分，每一层按照模块间的业务边界划分。
+### 与其它应用的关系
 
-**职责**
-1. 公共能力层：
-    - 承载：Number Identity 运行所需的基础能力集。
-    - 注意：`shared/` 是 RDB、数据模型与公共工具的基础框架，是 Number Identity 必选的最基础模块。
-    - 特性层各个模块包含的公共业务，也可以下沉到公共能力层。例如：DFX 工具（日志等）、预置数据（`etc/`）、NAPI 与 CallerInfoQuery 扩展（`frameworks/`、`interfaces/`）等需要跨多个特性复用的模块，放置在公共能力层；
+Number Identity 向 **CallUI**、**Contacts** 等系统应用提供黄页、归属地、标记等号码数据服务，不直接承载通话或联系人界面；电话核心能力由 Telephony 子系统提供。
 
-2. 特性层：
-    - 承载：抽象的公共特性的集合，每个特性高内聚、低耦合，且支持产品层进行定制。
-    - 基于本地号码识别业务（归属地查询、号码标记、黄页识别等）按照业务边界拆分成不同的模块，放置在特性层；
+**调用方式**：
 
-3. 产品层：
-    - 承载：针对当前设备的个性化业务、以及对所需特性层和公共能力层的定制。
-    - 公共能力和不同特性又由产品层的主入口进行集成和定制，打包为可直接部署的 HAP 包。
+- CallUI、Contacts 通过 DataShare Helper 访问 `com.ohos.numberlocationability`、`com.ohos.numbermarkability` 等 URI。
 
-**关系**
-1. 公共能力层和特性层，均无法直接部署和运行，需要由产品层集成后编译出 HAP 包，才能运行。
-2. 产品层可以向下依赖特性层和公共能力层，特性层可以向下依赖公共能力层，依赖方向自上而下，不允许反向依赖。
+**调用场景**：
 
-### 模块说明
-
-| 模块 | 路径 | 说明 |
-| ---- | ---- | ---- |
-| 应用入口 | entry/src/main/ets/Application/ | NumberLocationAbilityStage 进程初始化 |
-| ArkTS 占位页 | entry/src/main/ets/pages/ | Index.ets 当前仅保留空页面骨架 |
-| 领域服务 | entry/src/main/ets/service/ | NumberIdentityServiceExtAbility IPC 服务 |
-| DataShare 声明 | entry/src/main/ets/DataShareExtAbility/ | TS 占位；实际逻辑在 C++ 层 |
-| 数据更新调度 | entry/src/main/ets/DataShareExtAbility/DownloadFileWorkSheduler.ts | 按网络策略触发本地数据文件下载与更新 |
-| 备份扩展 | entry/src/main/ets/backup/ | 空实现 BackupExtension；范围由 backup_config.json 配置 |
-| 号码归属地 | number_location/ | Manager、Parser、Ability、DownloadFile |
-| 号码标记 | number_mark/ | NumberMarkAbility、CallerInfo、标记查询与维护 |
-| 黄页解析 | yellow_page/ | YellowPageParser 数据导入 |
-| 数据库与模型 | shared/ | RDB Helper、DDL、Models、JSON/Pinyin/HSDR 工具 |
-| 预置数据 | etc/ | numberlocation.data、yellowpage.data |
-| NAPI | frameworks/js/ | numberidentity / numberlookup |
-| 扩展框架 | frameworks/extension/ | CallerInfoQueryExtension |
-| 接口定义 | interfaces/ | innerkits / kits |
-| 日志 | utils/log/ | 统一日志宏与错误码 |
+来电界面展示标记与归属地、联系人详情号码解析、用户标记陌生号码等。
 
 ## 编译构建
 
-Number Identity 支持双构建体系：Hvigor 独立构建 HAP，以及系统 GN 合入构建 HAP + 共享库 + 预置数据。
-
-下图完整列出 `bundle.json` 构建分组涉及的源码模块、HAP、原生 / NAPI 共享库、扩展加载模块和预置数据；本工程没有独立 HAR。
-
-![Number Identity 编译部署](./figures/numberidentity_build.png)
+本工程支持 **Hvigor 独立构建 HAP** 与 **OpenHarmony 系统 GN 合入**（HAP + 原生共享库 + 预置数据），产物包名 `com.ohos.numberidentity`。
 
 ### 环境要求
-- OpenHarmony SDK（独立 HAP 工程的 `compileSdkVersion` 为 23，`compatibleSdkVersion` / `targetSdkVersion` 为 20）
-- OpenHarmony 系统源码树（部件路径：`base/telephony/number_identity`）
-- DevEco Studio 或命令行 Hvigor；系统 GN 工具链
-- 系统源码构建所需签名配置（见 `signature/pm.gni`；证书与 profile 由产品构建环境提供）
+- OpenHarmony SDK（Hvigor 工程 `compileSdkVersion` 为 23，`compatibleSdkVersion` / `targetSdkVersion` 为 20）
+- OpenHarmony 系统源码树（部件路径：`base/telephony/number_identity`）及 GN 工具链（系统合入时）
+- DevEco Studio 或命令行 Hvigor
+- 系统签名配置（见 `signature/`）
 
 ### 编译命令
 
-1. **系统 GN 编译**
-
-在 OpenHarmony 源码根目录执行：
-
-```bash
-./build.sh --product-name {product_name} --build-target number_identity --ccache
-```
-
-2. **DevEco / Hvigor 独立编译**
+在工程根目录执行 Hvigor 构建（需本机已配置 `hvigorw`，或使用 DevEco Studio）：
 
 ```bash
 hvigorw assembleHap
 ```
 
-> **说明**：独立开发时需将工程拷贝至 `base/telephony/number_identity` 目录后随系统编译，或配置系统签名后使用 Hvigor 独立构建。
+系统源码树中合入时，在源码根目录执行：
 
-### 构建产物
+```bash
+./build.sh --product-name {product_name} --build-target number_identity --ccache
+```
 
-| 类型 | 产物 / GN 目标 | 说明 |
-| ---- | -------------- | ---- |
-| HAP | `NumberIdentity.hap`（目标 `NumberIdentity`） | entry 模块；安装至 `/system/app/com.ohos.numberidentityability` |
-| 原生共享库 | `number_identity` | 归属地、号码标记、黄页与 shared RDB 核心实现 |
-| NAPI 共享库 | `numberlookup`、`numberidentity` | 分别安装至 `module/contact`、`module/telephony` |
-| CallerInfoQuery 共享库 | `caller_info_query_extension`、`caller_info_query_extension_module` | 扩展框架及 `extensionability/` 加载模块 |
-| CallerInfoQuery NAPI | `callerinfoqueryextensionability_napi`、`callerinfoqueryextensioncontext_napi` | Ability 与 Context JS/NAPI 模块 |
-| 预置数据 | `numberlocation.data`、`yellowpage.data` | 安装至 `/system/etc/telephony/` |
-| HAR | 无 | 工程未定义 `ohos_har` / HAR 模块；对外能力通过原生共享库与 NAPI 提供 |
-
-`bundle.json` 声明部件归属 telephony 子系统，构建分组包含 `fwk_group`（NAPI / 扩展 / etc）与 `service_group`（HAP / so）。
+> **说明**：独立开发可将工程置于 `base/telephony/number_identity` 后随系统编译，或配置系统签名后使用 Hvigor 构建。
 
 ## Number Identity 开发
 
-Number Identity 采用 **ArkTS + C++** 混合开发，DataShare 核心逻辑在 C++ 层实现，ArkTS 层负责 Extension 声明与服务编排。当前 `pages/Index.ets` 仅为空页面骨架；如需扩展 ArkTS 页面，可参考：[ArkUI 开发概述](https://gitcode.com/openharmony/docs/blob/master/zh-cn/application-dev/ui/arkts-ui-development-overview.md)
+Number Identity 采用 **ArkTS + C++** 混合开发：DataShare 与黄页 / 归属地 / 标记核心在 C++ 特性层实现，ArkTS 负责 Extension 声明与服务扩展。扩展 ArkTS 页面可参考：[ArkUI 开发概述](https://gitcode.com/openharmony/docs/blob/master/zh-cn/application-dev/ui/arkts-ui-development-overview.md)
 
 ### 基于已有模块的开发
 
-适用场景：扩展号码识别能力，例如新增本地查询维度、扩展 CallerInfoQuery、定制本地数据文件更新策略。
+适用场景：对已有归属地 / 黄页 / 标记能力做功能定制，例如补充预置数据、调整标记查询交互等。
 
-**扩展 DataShare 查询**
-1. 在对应 Ability（如 `NumberMarkAbility`）中新增查询路径处理。
-2. 通过 `NumberIdentityDataShareStubImpl` 的 URI 路由分发到目标 Ability。
-3. 使用 Bridge 类封装返回结果。
+以下列举一些常见的修改场景：
 
-现有路由中，Stub 根据 URI 将请求交给三个本地 DataShare Ability：
+**场景1：添加 / 修改归属地 `numberlocation.data`**
 
+   - 源文件：`etc/numberlocation.data`
+   - 安装：`etc/BUILD.gn` 中 `number_location_data_default` → `/system/etc/telephony/numberlocation.data`
+   - 运行时亦可放到沙箱路径：`/data/storage/el2/base/files/numberlocation.data`
+
+例如，需新增号段记录，可在 `numberlocation.data` 中追加：
+```text
+    // numberlocation.data
+    {"version":"1"}
+    {"prefix":"1810256","province":"广东","city":"广州","operator":"电信"}
+    ...
+```
+
+**场景2：添加 / 修改归属地 `numberlocation.dat`**
+
+   - 号码归属地除支持 JSON 文本格式的 `numberlocation.data` 外，还支持二进制格式的 `numberlocation.dat`：前者为可读的 JSON 行数据，便于直接增改号段；后者为二进制归属地库，体积更紧凑，由 `number_location/src/number_location_db_parse.cpp` 加载与解析（如 `QueryPhoneNumberLocation`、`QueryTelNumberLocation`）
+   - 源文件置于工程 `etc/numberlocation.dat`；系统预置安装路径为 `/system/etc/telephony/numberlocation.dat`
+   - 运行时亦可将完整文件放到沙箱路径：`/data/storage/el2/base/files/numberlocation.dat`
+   - 仓库默认不附带完整 `.dat` 示例，正式库需由产品侧自行准备二进制文件
+
+添加 / 修改操作建议：
+
+1. **随系统镜像预置**：将目标 `numberlocation.dat` 放入 `etc/`，启用对应预置安装目标后随系统 GN 编入镜像，安装到 `/system/etc/telephony/numberlocation.dat`。
+2. **设备侧替换**：用 `hdc` 将新文件推送到沙箱路径 `/data/storage/el2/base/files/numberlocation.dat`；若需覆盖系统预置目录，须具备 remount 等写系统分区条件，再推送到 `/system/etc/telephony/numberlocation.dat`。
+3. **生效方式**：替换文件后重启相关进程或设备，使归属地库重新加载后再验证查询结果。
+
+**场景3：号码标记**
+
+   - 核心位于 `number_mark/src/number_mark_ability.cpp`、`number_mark_manager.cpp`
+   - 增删改查经 `com.ohos.numbermarkability` 路由至 `NumberMarkAbility`
+   - 标记查询入口为 `QueryByPhoneNumber`：先匹配本地黄页，未命中再查用户本地标记
+
+例如，需在用户标记命中后增加自定义处理，可在 `QueryByPhoneNumber` 中扩展：
 ```cpp
-std::shared_ptr<DataShareExtAbility>
-NumberIdentityDataShareStubImpl::GetOwner(const Uri &uri)
-{
-    OHOS::Uri uriTemp = uri;
-    std::string path = uriTemp.GetPath();
-    if (path.find("com.ohos.numberlocationability") != std::string::npos) {
-        return GetNumberLocationAbility();
+    // number_mark_ability.cpp
+    auto mark = find_if(numberMarks.cbegin(), numberMarks.cend(), IsUserMark);
+    if (mark != numberMarks.cend()) {
+      // 【修改点】用户标记命中后可在此扩展自定义处理
+      // CustomProcessNumberMark(*mark);
+      markInfo.FromNumberMark(*mark);
+      return SetBusinessError(businessError, errCode);
     }
-    if (path.find("com.ohos.downloadfileability") != std::string::npos) {
-        return GetDownloadFileAbility();
-    }
-    if (path.find("com.ohos.numbermarkability") != std::string::npos) {
-        return GetNumberMarkAbility();
-    }
-    return nullptr;
-}
+    ...
 ```
 
-**新增 NAPI 接口**
-1. 在 `frameworks/js` 中注册新接口。
-2. 内部通过 `DataShareHelper` 访问对应 URI。
-3. 按需更新 `interfaces/` 中的 innerkits / Kit 接口实现。
+**场景4：写入号码标记数据**
 
-同一套接口以两个模块名注册，分别供 Telephony 与 Contacts 使用：
+   - 对外写入口为 DataShare `Update`（`Insert` 不支持），URI：`datashare:///com.ohos.numbermarkability/number_mark_info`（需 `SET_TELEPHONY_STATE`）
+   - 实现：`NumberMarkAbility::Update` → `SetNumberMark`（`number_mark_ability.cpp`）
+   - 必填：`phoneNumber`、`markType`；自定义标记另需 `customMarkContent`；`markType` 为 `MARK_TYPE_NONE` 表示删除
 
+例如，写入一条骚扰标记：
 ```cpp
-static napi_module g_nativeNumberIdentityModule = {
-    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
-    .nm_modname = "telephony.numberidentity",
-};
-
-static napi_module g_nativeNumberLookupModule = {
-    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
-    .nm_modname = "contact.numberlookup",
-};
+    // number_mark_ability.cpp — SetNumberMark 写入入口
+    Uri uri("datashare:///com.ohos.numbermarkability/number_mark_info");
+    DataShareValuesBucket values;
+    values.Put(SetNumberMarkParamsFields::phoneNumber, "12345678901");
+    values.Put(SetNumberMarkParamsFields::markType, static_cast<int64_t>(MarkType::MARK_TYPE_CRANK));
+    // 【修改点】可改为自定义标记并补充 customMarkContent，或设为 MARK_TYPE_NONE 删除
+    ...
+    ability->Update(uri, predicates, values);
 ```
 
-**扩展 CallerInfoQuery**
-1. 第三方应用实现 `CallerInfoQueryExtensionAbility`。
-2. 在 `onQueryCallerInfo(number)` 回调中返回企业来电信息。
-3. 系统通过 `CallerInfoQueryExtension` 框架 IPC 调用。
+**场景5：添加 / 修改号码黄页 `yellowpage.data`**
 
-基类位于 `interfaces/kits/caller_info_query_extension_ability/`，第三方应用可基于该基类实现查询逻辑：
+   - 源文件：`etc/yellowpage.data`
+   - 解析：`yellow_page/src/yellow_page_parser.cpp`
+   - 安装：`etc/BUILD.gn` 中 `yellow_page_default` → `/system/etc/telephony/yellowpage.data`
+   - 导入：`NumberIdentityDatabase::ImportYellowPageData`
 
-```javascript
-class CallerInfoQueryExtensionAbility {
-  async onQueryCallerInfo(number) {
-    console.log('onQueryCallerInfo:' + number);
-  }
-}
-
-export default CallerInfoQueryExtensionAbility;
+例如，需按路径导入黄页数据，可调用：
+```cpp
+    // shared
+    // 【修改点】按需替换导入路径或扩展导入前后处理
+    NumberIdentityDatabase::ImportYellowPageData(
+        "/data/storage/el2/base/files/yellowpage.data");
 ```
 
-### 新特性开发
+常用修改入口：
 
-适用场景：新增本地识别维度、补充数据文件更新策略、扩展对外 Kit。
+| 目标 | 路径 |
+|------|------|
+| 进程初始化 | `entry/src/main/ets/Application/NumberLocationAbilityStage.ts` |
+| DataShare 路由 | `number_location/src/number_identity_datashare_stub_impl.cpp` |
+| 号码归属地 | `number_location/src/number_location_ability.cpp`、`number_location_manager.cpp`、`number_location_utils.cpp`、`number_location_db_parse.cpp` |
+| 归属地 / 黄页预置数据 | `etc/numberlocation.data`、`etc/yellowpage.data`、`etc/numberlocation.dat`、`etc/BUILD.gn` |
+| 号码标记 | `number_mark/src/number_mark_ability.cpp` |
+| 号码黄页 | `yellow_page/src/yellow_page_parser.cpp`、`shared` 中 `ImportYellowPageData` |
+| 标记数据 IPC 服务 | `entry/src/main/ets/service/NumberIdentityServiceExtAbility.ts` |
+| RDB 与模型 | `shared/` |
+| Ability / DataShare 声明 | `entry/src/main/module.json5` |
 
-**步骤1：扩展 C++ 特性模块**
+### 新特性能力的开发
 
-在特性层目录新增 / 扩展实现，并在根目录 `BUILD.gn` 的 `number_identity` 共享库中注册源文件：
+适用场景：扩展归属地 / 黄页 / 标记维度、新增 DataShare URI 或补充数据文件格式支持。
 
-```gn
-ohos_shared_library("number_identity") {
-  sources = [
-    # ... existing sources ...
-    "$NUMBER_IDENTITY_ROOT/number_location/src/number_location_parser.cpp",
-    # "$NUMBER_IDENTITY_ROOT/<new_feature>/src/<new_module>.cpp",
-  ]
-}
-```
+> **说明**：特性层代码需编入根目录 `BUILD.gn` 的 `number_identity` 共享库；对外 URI 与权限需与 CallUI、Contacts 等消费方约定一致。
 
-**步骤2：声明 DataShare 路由与权限**
+**场景1：扩展 C++ 特性模块**
 
-如需新 DataShare URI，同步更新 `NumberIdentityDataShareStubImpl::GetOwner` 路由与 `module.json5` 声明。例如，新增能力时需声明类型、URI 与访问权限：
+1. 在 `number_location/`、`number_mark/` 或 `yellow_page/` 下新增实现。
+2. 在 `BUILD.gn` 的 `ohos_shared_library("number_identity")` 中注册源文件。
+3. 在 `test/unittest/` 中补充 gtest 并在对应 `BUILD.gn` 注册。
+
+**场景2：声明 DataShare 与权限**
+
+如需新 DataShare URI，同步更新 `NumberIdentityDataShareStubImpl::GetOwner` 与 `entry/src/main/module.json5`，例如现有标记能力声明：
 
 ```json
 {
@@ -257,102 +211,79 @@ ohos_shared_library("number_identity") {
 }
 ```
 
-**步骤3：对外暴露接口**
-
-如需对外暴露，补充 `interfaces/` 与 `frameworks/js` 中的 NAPI 注册。同一套接口需同时注册 Telephony 与 Contacts 模块名：
-
-```cpp
-static napi_module g_nativeNumberIdentityModule = {
-    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
-    .nm_modname = "telephony.numberidentity",
-};
-
-static napi_module g_nativeNumberLookupModule = {
-    .nm_register_func = NapiNumberIdentity::RegisterNumberIdentityFunc,
-    .nm_modname = "contact.numberlookup",
-};
-```
-
-**步骤4：补充测试**
-
-在 `test/unittest/` 中补充 gtest，并在对应 `BUILD.gn` 中注册用例源文件：
-
-```gn
-ohos_unittest("tel_number_location_gtest") {
-  sources = [
-    "src/number_location_gtest.cpp",
-    "src/number_location_ability_gtest.cpp",
-    # "src/<new_feature>_gtest.cpp",
-  ]
-}
-```
-
 ## 目录
+
 ```text
 number_identity
 ├─AppScope                              # 应用级配置与多语言资源
+│  ├─app.json5                          # Hvigor 包名、版本号等
 │  ├─app.json                           # 系统 GN 构建使用的应用配置
-│  ├─app.json5                          # Hvigor 使用的 bundleName、版本号等
-│  └─resources/                         # 全局 string 等资源
-├─entry                                 # HAP 入口模块
-│  ├─src/main/                          # 主源码目录
-│  │  ├─ets/                            # ArkTS 业务源码
-│  │  │  ├─Application/                 # AbilityStage 进程初始化
-│  │  │  ├─DataShareExtAbility/         # DataShare 声明与数据更新 WorkScheduler
-│  │  │  ├─service/                     # NumberIdentityServiceExtAbility
-│  │  │  ├─pages/                       # ArkTS 占位页（当前为空页面骨架）
-│  │  │  ├─common/                      # 常量、日志、连接工具
-│  │  │  └─backup/                      # 空实现 BackupExtension
-│  │  ├─resources/                      # 模块资源、多语言等
-│  │  ├─module.json                     # 系统 GN 构建使用的模块配置
-│  │  └─module.json5                    # Hvigor 使用的 Ability、权限、DataShare 声明
-│  ├─build-profile.json5                # 模块级构建配置
-│  └─obfuscation-rules.txt              # 混淆规则
-├─number_location/                      # 号码归属地（C++）
-├─number_mark/                          # 号码标记（C++）
-├─yellow_page/                          # 黄页解析（C++）
-├─shared/                               # RDB / Models / 公共工具
-├─frameworks/                           # NAPI 与 CallerInfoQuery 扩展
-├─interfaces/                           # innerkits / kits 对外接口
-├─etc/                                  # 预置数据（设备侧 system/etc/telephony/）
-├─utils/log/                            # 统一日志宏与错误码
-├─figures/                              # 架构图
-│  ├─numberidentity_in_os.png           # 系统中定位（中文）
-│  ├─numberidentity_architecture.png    # 分层架构（中文）
-│  ├─numberidentity_ipc.png             # 部件与外部依赖（中文）
-│  ├─numberidentity_build.png           # 编译部署（中文）
-│  ├─numberidentity_in_os_en.png        # 系统中定位（英文）
-│  ├─numberidentity_architecture_en.png # 分层架构（英文）
-│  ├─numberidentity_ipc_en.png          # 部件与外部依赖（英文）
-│  └─numberidentity_build_en.png        # 编译部署（英文）
-├─test/                                 # gtest / fuzztest
-├─signature/                            # 系统 GN 签名配置（pm.gni）
-├─hvigor/                               # 构建工具配置
+│  └─resources/                         # 全局字符串等资源
+├─figures/                              # 架构说明图
+├─entry                                 # 产品层
+│  └─src/main/
+│     ├─ets/
+│     │  ├─Application/                 # 进程初始化
+│     │  ├─DataShareExtAbility/         # DataShare 扩展声明
+│     │  ├─service/                     # 标记数据 IPC 服务扩展
+│     │  ├─pages/                       # 页面入口
+│     │  ├─common/                      # 常量、日志、连接工具
+│     │  └─backup/                      # 备份恢复扩展
+│     ├─resources/                      # 模块资源与配置
+│     ├─module.json5                    # Ability、DataShare、权限声明
+│     └─module.json                     # 系统 GN 模块配置
+├─number_location/                      # 特性层：号码归属地
+│  ├─include/
+│  └─src/                               # 归属地管理、解析与 Ability 等
+├─number_mark/                          # 特性层：号码标记
+│  ├─include/
+│  └─src/                               # 标记能力与管理实现等
+├─yellow_page/                          # 特性层：号码黄页
+│  ├─include/
+│  └─src/                               # 黄页解析实现等
+├─shared/                               # 公共层：共享数据库
+├─frameworks/                           # 公共层：框架相关实现
+├─interfaces/                           # 公共层：接口定义
+├─etc/                                  # 公共层：预置数据
+├─utils/log/                            # 公共层：日志工具
+├─tools/                                # 辅助工具
+├─test/                                 # 单元测试与模糊测试
+├─signature/                            # 签名配置
+├─hvigor/                               # Hvigor 构建配置
 ├─BUILD.gn                              # 系统 GN 构建入口
 ├─bundle.json                           # 部件归属与构建分组
-├─build-profile.json5                   # 工程级 SDK / 签名 / product 配置
-├─oh-package.json5                      # 依赖与包信息
+├─build-profile.json5                   # 工程级 SDK 配置
+├─oh-package.json5
 ├─OAT.xml                               # 开源合规审计
-├─LICENSE                               # 开源许可证
-├─README_zh.md                          # 中文说明
-└─REAMDE_en.md                          # 英文说明
+├─LICENSE
+├─README.md                             # 英文说明文档
+└─README_zh.md                          # 中文说明文档
 ```
 
 ## 约束
-- 语言版本：ArkTS + C++
-- 子系统归属：telephony
-- 部署路径：`base/telephony/number_identity`
-- 设备类型：`default`、`tablet`（见 `module.json5`）
-- 识别方式：仅本地数据库 / 数据文件，无在线识别
-- 预置数据路径：设备端 `system/etc/telephony/`
-- 本地数据库：`/data/storage/el1/database/number_identity.db`
-- 需要 `MANAGE_SETTINGS` 等系统权限读写电话相关设置项
+
+- **语言版本**：ArkTS + C++
+- **运行形态**：系统预置部件（`com.ohos.numberidentity`），以 HAP + 原生共享库 + 预置数据部署；能力由 `extensionAbilities` 提供
+- **设备类型**：手机、平板（见 `entry/src/main/module.json5`）
+- **签名要求**：须使用系统签名配置（见 `signature/`）
+- **权限**：号码识别主要权限如下（见 `entry/src/main/module.json5` 的 `requestPermissions`；部分 extension 另声明 `SET_TELEPHONY_STATE`）
+
+  | 权限 | 授权方式 | 使用场景 |
+  |------|---------|----------|
+  | ohos.permission.GET_TELEPHONY_STATE | 系统授权 | DataShare 读、电话状态相关查询 |
+  | ohos.permission.SET_TELEPHONY_STATE | 系统授权 | 标记写入等 |
+  | ohos.permission.WRITE_CALL_LOG | 系统授权 | 号码标记相关场景 |
+  | ohos.permission.MANAGE_SETTINGS | 系统授权 | 相关系统设置项读写 |
+  | ohos.permission.GET_BUNDLE_INFO | 系统授权 | 查询应用包信息 |
+
+- **外部依赖**：CallUI、Contacts 通过 DataShare 消费本部件数据；Telephony 子系统提供底层能力
 
 ## 参与贡献
 
 欢迎广大开发者贡献代码、文档等，具体的贡献流程和方式请参见[参与贡献](https://gitcode.com/openharmony/docs/blob/master/zh-cn/contribute/%E5%8F%82%E4%B8%8E%E8%B4%A1%E7%8C%AE.md)。
 
 ## 相关仓
-- [applications_call](https://gitcode.com/openharmony/applications_call)（通话界面等号码识别数据消费方）
-- [telephony_core_service](https://gitcode.com/openharmony/telephony_core_service)（电话核心服务）
-- [telephony_call_manager](https://gitcode.com/openharmony/telephony_call_manager)（通话管理服务）
+
+[**callui**](https://gitcode.com/openharmony/applications_call)
+
+[**contacts**](https://gitcode.com/openharmony/applications_contacts)
