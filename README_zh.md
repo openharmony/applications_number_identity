@@ -121,22 +121,19 @@ Number Identity 采用 **ArkTS + C++** 混合开发：DataShare 与黄页 / 归�
 
    - 核心位于 `number_mark/src/number_mark_ability.cpp`、`number_mark_manager.cpp`
    - 增删改查经 `com.ohos.numbermarkability` 路由至 `NumberMarkAbility`
+   - 标记查询入口为 `QueryByPhoneNumber`：先匹配本地黄页，未命中再查用户本地标记
 
-例如，需在本地黄页命中后增加自定义处理，可在 `QueryByPhoneNumber` 中扩展：
+例如，需在用户标记命中后增加自定义处理，可在 `QueryByPhoneNumber` 中扩展：
 ```cpp
     // number_mark_ability.cpp
-    int NumberMarkAbility::QueryByPhoneNumber(
-        const string &phoneNumber, NumberMarkInfo &markInfo, DatashareBusinessError &businessError)
-    {
-      ...
-      if (auto it = FindYellowPageBestMatch(phoneNumber, yellowPages); it.has_value()) {
-        // 【修改点】黄页命中后可在此扩展自定义处理
-        // CustomProcessYellowPage(*it);
-        markInfo.FromYellowPage(*it);
-        return SetBusinessError(businessError, errCode);
-      }
-      ...
+    auto mark = find_if(numberMarks.cbegin(), numberMarks.cend(), IsUserMark);
+    if (mark != numberMarks.cend()) {
+      // 【修改点】用户标记命中后可在此扩展自定义处理
+      // CustomProcessNumberMark(*mark);
+      markInfo.FromNumberMark(*mark);
+      return SetBusinessError(businessError, errCode);
     }
+    ...
 ```
 
 **场景4：添加 / 修改号码黄页 `yellowpage.data`**

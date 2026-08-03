@@ -121,22 +121,19 @@ Suggested add / update steps:
 
    - Core: `number_mark/src/number_mark_ability.cpp`, `number_mark_manager.cpp`
    - CRUD is routed to `NumberMarkAbility` through `com.ohos.numbermarkability`
+   - Mark query entry is `QueryByPhoneNumber`: match local yellow pages first, then query local user marks on miss
 
-For example, to add custom handling after a local yellow-page hit, extend `QueryByPhoneNumber`:
+For example, to add custom handling after a user-mark hit, extend `QueryByPhoneNumber`:
 ```cpp
     // number_mark_ability.cpp
-    int NumberMarkAbility::QueryByPhoneNumber(
-        const string &phoneNumber, NumberMarkInfo &markInfo, DatashareBusinessError &businessError)
-    {
-      ...
-      if (auto it = FindYellowPageBestMatch(phoneNumber, yellowPages); it.has_value()) {
-        // [Change point] extend custom handling here after a yellow-page hit
-        // CustomProcessYellowPage(*it);
-        markInfo.FromYellowPage(*it);
-        return SetBusinessError(businessError, errCode);
-      }
-      ...
+    auto mark = find_if(numberMarks.cbegin(), numberMarks.cend(), IsUserMark);
+    if (mark != numberMarks.cend()) {
+      // [Change point] extend custom handling here after a user-mark hit
+      // CustomProcessNumberMark(*mark);
+      markInfo.FromNumberMark(*mark);
+      return SetBusinessError(businessError, errCode);
     }
+    ...
 ```
 
 **Scenario 4: Add / update yellow-page `yellowpage.data`**
