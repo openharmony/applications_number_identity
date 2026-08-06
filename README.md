@@ -2,7 +2,22 @@
 
 ## Introduction
 
-**Number Identity** (bundle name: `com.ohos.numberidentity`) is a system component in the OpenHarmony telephony subsystem. It is deployed as a system HAP plus native shared library, providing **number location, number marking, and yellow pages** capabilities, and exposing DataShare data services to call and contacts applications.
+**Number Identity** (bundle name: `com.ohos.numberidentity`) is a system component in the OpenHarmony telephony subsystem. It is deployed as a system HAP plus native shared library, providing **number location, number marking, and yellow pages** capabilities, and exposing DataShare data services to call, contacts, and messaging applications.
+
+The component already ships local preset number data. Current repository examples include:
+
+- Location text database `etc/numberlocation.data` (JSON lines), for example:
+```text
+{"version":"1"}
+{"prefix":"1810256","province":"广东","city":"广州","operator":"电信"}
+{"prefix":"1371738","province":"广东","city":"东莞","operator":"移动"}
+```
+- Yellow-page preset database `etc/yellowpage.data` (JSON lines, including carrier customer-service records), for example:
+```text
+{"version":"123"}
+{"group":"电信","name":"中国移动","phone":[{"phone":"10086","name":"中国移动"},{"phone":"1008611","name":"中国移动"}]}
+{"group":"电信","name":"中国联通","phone":[{"phone":"10010","name":"中国联通客服热线"},{"phone":"10011","name":"中国联通充值专线"}]}
+```
 
 ### Core Capabilities
 
@@ -32,7 +47,7 @@ The overall structure is divided into product layer, feature layer, and common l
 | ----- | --------------------------- | ----------- |
 | Product layer | `entry` (phone / pad) | Phone / tablet forms |
 | Feature layer | `number_location/`, `number_mark/`, `yellow_page/` | Number location, number marking, and yellow pages |
-| Common layer | `shared/`, `etc/`, `utils/`, `interfaces/` | Shared database, preset data, log tools, and interface definitions |
+| Common layer | `shared/`, `etc/`, `utils/`, `interfaces/` | Shared database, preset data, log tools, and external interfaces |
 
 **Feature layer module description**:
 
@@ -44,22 +59,32 @@ The overall structure is divided into product layer, feature layer, and common l
 
 ### Relationship with Other Applications
 
-Number Identity provides yellow-page, location, and mark number-data services to system apps such as **CallUI** and **Contacts**. It does not host call or contacts UI itself; core telephony capabilities are provided by the Telephony subsystem.
+Number Identity provides yellow-page, location, and mark number-data services to system apps such as **CallUI**, **Contacts**, and **MMS (Messaging)**. It does not host call, contacts, or messaging UI itself; core telephony capabilities are provided by the Telephony subsystem.
+
+Preset data (such as `etc/numberlocation.data`, `etc/yellowpage.data`, and `etc/numberlocation.dat`) is maintained by the Number Identity component. Consumers such as CallUI, Contacts, and MMS only query and use the data through DataShare and do not directly modify these preset data files.
 
 **Invocation**:
 
-- CallUI and Contacts access URIs such as `com.ohos.numberlocationability` and `com.ohos.numbermarkability` through DataShare Helper.
+Consumers access Number Identity external URI paths through `DataShareHelper` (mainly `query`; mark writes use `update`), for example:
+
+| Consumer | Main call | URI path |
+| -------- | --------- | -------- |
+| CallUI | `query` | `datashare:///com.ohos.numbermarkability/number_mark` |
+| Contacts | `query` | `datashare:///com.ohos.numbermarkability/number_mark`, `.../yellow_page_view` |
+| MMS | `query` | `datashare:///com.ohos.numbermarkability/yellow_page_view` |
+
+The component also exposes NAPI APIs `getNumberLocation` / `getNumberLocations` (backed by `com.ohos.numberlocationability`) and `getNumberMarkInfo` / `setNumberMarkInfo` (backed by `.../number_mark_info`). Location text shown on the CallUI is usually queried by the call side and delivered with call data; CallUI itself directly calls mark `query`.
 
 **Invocation scenarios**:
 
-Showing marks and location on the incoming-call UI, resolving numbers in contacts details, user marking of unknown numbers, and similar flows.
+Showing marks and location on the incoming-call UI, resolving numbers in contacts details, user marking of unknown numbers, showing yellow-page names in messaging sessions, and similar flows.
 
 ## Build
 
 This project supports **standalone Hvigor HAP builds** and **OpenHarmony system GN integration** (HAP + native shared library + prebuilt data). The product bundle name is `com.ohos.numberidentity`.
 
 ### Environment Requirements
-- OpenHarmony SDK (Hvigor project `compileSdkVersion` is 23; `compatibleSdkVersion` / `targetSdkVersion` are 20)
+- OpenHarmony SDK: compileSdkVersion 26, compatibleSdkVersion 23
 - OpenHarmony source tree (component path: `base/telephony/number_identity`) and GN toolchain (for system integration)
 - DevEco Studio or command-line Hvigor
 - System signing configuration (see `signature/`)
@@ -187,7 +212,7 @@ Common modification entries:
 
 Typical use cases: extend location / yellow-page / mark dimensions, add DataShare URIs, or support additional data-file formats.
 
-> **Note**: Feature-layer code must be registered into the `number_identity` shared library in the root `BUILD.gn`. External URIs and permissions must stay consistent with consumers such as CallUI and Contacts.
+> **Note**: Feature-layer code must be registered into the `number_identity` shared library in the root `BUILD.gn`. External URIs and permissions must stay consistent with consumers such as CallUI, Contacts, and MMS.
 
 **Scenario 1: Extend C++ feature modules**
 
@@ -276,7 +301,7 @@ number_identity
   | ohos.permission.MANAGE_SETTINGS | System grant | Related system settings read/write |
   | ohos.permission.GET_BUNDLE_INFO | System grant | Query bundle info |
 
-- **External dependencies**: CallUI and Contacts consume this component's data through DataShare; the Telephony subsystem provides underlying capabilities
+- **External dependencies**: CallUI, Contacts, and MMS consume this component's data through DataShare; the Telephony subsystem provides underlying capabilities
 
 ## Contributing
 
@@ -287,3 +312,5 @@ Contributions of code and documentation are welcome. For the contribution proces
 [**callui**](https://gitcode.com/openharmony/applications_call)
 
 [**contacts**](https://gitcode.com/openharmony/applications_contacts)
+
+[**mms**](https://gitcode.com/openharmony/applications_mms)
