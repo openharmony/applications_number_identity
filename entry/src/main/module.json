@@ -23,7 +23,7 @@
         "description": "dataability_description",
         "type": "dataShare",
         "uri": "datashare://com.ohos.numberlocationability",
-        "visible": true,
+        "exported": true,
         "srcLanguage": "c++"
       },
       {
@@ -34,14 +34,15 @@
         "description": "dataability_description",
         "type": "dataShare",
         "uri": "datashare://com.ohos.downloadfileability",
-        "visible": true,
+        "exported": true,
         "srcLanguage": "c++"
       },
       {
         "name": "DownloadFileWorkSheduler",
         "srcEntrance": "./ets/DataShareExtAbility/DownloadFileWorkSheduler.ts",
         "description": "download_file_WorkSheduler",
-        "type": "workScheduler"
+        "type": "workScheduler",
+        "exported": false
       },
       {
         "name": "BackupExtensionAbility",
@@ -49,7 +50,7 @@
         "description": "dataability_description",
         "label": "dataability_description",
         "type": "backup",
-        "exported": true,
+        "exported": false,
         "metadata": [
           {
             "name": "ohos.extension.backup",
@@ -72,7 +73,7 @@
         "description": "Number mark data query.",
         "type": "dataShare",
         "uri": "datashare://com.ohos.numbermarkability",
-        "visible": true,
+        "exported": true,
         "srcLanguage": "c++"
       }
     ],

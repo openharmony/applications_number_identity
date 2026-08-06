@@ -2,7 +2,22 @@
 
 ## 简介
 
-**号码识别**（包名：`com.ohos.numberidentity`）是 OpenHarmony 电话子系统中的系统部件，以系统 HAP 与原生共享库形式部署，提供**号码归属地、号码标记与号码黄页**等能力，并向通话、联系人等应用提供 DataShare 数据服务。
+**号码识别**（包名：`com.ohos.numberidentity`）是 OpenHarmony 电话子系统中的系统部件，以系统 HAP 与原生共享库形式部署，提供**号码归属地、号码标记与号码黄页**等能力，并向通话、联系人、短信等应用提供 DataShare 数据服务。
+
+工程已随部件预置本地号码数据，当前仓库示例包括：
+
+- 归属地文本库 `etc/numberlocation.data`（JSON 行），例如：
+```text
+{"version":"1"}
+{"prefix":"1810256","province":"广东","city":"广州","operator":"电信"}
+{"prefix":"1371738","province":"广东","city":"东莞","operator":"移动"}
+```
+- 黄页预置库 `etc/yellowpage.data`（JSON 行，含运营商客服等记录），例如：
+```text
+{"version":"123"}
+{"group":"电信","name":"中国移动","phone":[{"phone":"10086","name":"中国移动"},{"phone":"1008611","name":"中国移动"}]}
+{"group":"电信","name":"中国联通","phone":[{"phone":"10010","name":"中国联通客服热线"},{"phone":"10011","name":"中国联通充值专线"}]}
+```
 
 ### 核心能力
 
@@ -32,7 +47,7 @@ Number Identity 采用分层与模块化设计，按产品入口、业务特性�
 |------| -------------- | ---- |
 | 产品层 | `entry`（phone / pad） | 手机 / 平板形态 |
 | 特性层 | `number_location/`、`number_mark/`、`yellow_page/` | 号码归属地、号码标记、号码黄页 |
-| 公共层 | `shared/`、`etc/`、`utils/`、`interfaces/` | 共享数据库、预置数据、日志工具、接口定义 |
+| 公共层 | `shared/`、`etc/`、`utils/`、`interfaces/` | 共享数据库、预置数据、日志工具、对外接口 |
 
 **特性层模块说明**：
 
@@ -44,22 +59,32 @@ Number Identity 采用分层与模块化设计，按产品入口、业务特性�
 
 ### 与其它应用的关系
 
-Number Identity 向 **CallUI**、**Contacts** 等系统应用提供黄页、归属地、标记等号码数据服务，不直接承载通话或联系人界面；电话核心能力由 Telephony 子系统提供。
+Number Identity 向 **CallUI**、**Contacts**、**MMS（短信）** 等系统应用提供黄页、归属地、标记等号码数据服务，不直接承载通话、联系人或短信界面；电话核心能力由 Telephony 子系统提供。
+
+预置数据（如 `etc/numberlocation.data`、`etc/yellowpage.data`、`etc/numberlocation.dat`）由号码识别部件维护；CallUI、Contacts、MMS 等消费方仅通过 DataShare 查询使用，不直接改写上述预置数据文件。
 
 **调用方式**：
 
-- CallUI、Contacts 通过 DataShare Helper 访问 `com.ohos.numberlocationability`、`com.ohos.numbermarkability` 等 URI。
+各消费方通过 `DataShareHelper` 访问号码识别对外 URI 路径（主要调用 `query`；标记写入走 `update`），例如：
+
+| 消费方 | 主要调用 | URI 路径 |
+|------|---------|---------|
+| CallUI | `query` | `datashare:///com.ohos.numbermarkability/number_mark` |
+| Contacts | `query` | `datashare:///com.ohos.numbermarkability/number_mark`、`.../yellow_page_view` |
+| MMS | `query` | `datashare:///com.ohos.numbermarkability/yellow_page_view` |
+
+另外，部件还通过 NAPI 对外提供 `getNumberLocation` / `getNumberLocations`（对应 `com.ohos.numberlocationability`）以及 `getNumberMarkInfo` / `setNumberMarkInfo`（对应 `.../number_mark_info`）。CallUI 界面上的归属地展示通常由通话侧先查询后随通话数据下发，CallUI 侧直接调用的是标记 `query`。
 
 **调用场景**：
 
-来电界面展示标记与归属地、联系人详情号码解析、用户标记陌生号码等。
+来电界面展示标记与归属地、联系人详情号码解析、用户标记陌生号码、短信会话展示黄页名称等。
 
 ## 编译构建
 
 本工程支持 **Hvigor 独立构建 HAP** 与 **OpenHarmony 系统 GN 合入**（HAP + 原生共享库 + 预置数据），产物包名 `com.ohos.numberidentity`。
 
 ### 环境要求
-- OpenHarmony SDK（Hvigor 工程 `compileSdkVersion` 为 23，`compatibleSdkVersion` / `targetSdkVersion` 为 20）
+- Openharmony SDK: compileSdkVersion 26, compatibleSdkVersion 23
 - OpenHarmony 系统源码树（部件路径：`base/telephony/number_identity`）及 GN 工具链（系统合入时）
 - DevEco Studio 或命令行 Hvigor
 - 系统签名配置（见 `signature/`）
@@ -187,7 +212,7 @@ Number Identity 采用 **ArkTS + C++** 混合开发：DataShare 与黄页 / 归�
 
 适用场景：扩展归属地 / 黄页 / 标记维度、新增 DataShare URI 或补充数据文件格式支持。
 
-> **说明**：特性层代码需编入根目录 `BUILD.gn` 的 `number_identity` 共享库；对外 URI 与权限需与 CallUI、Contacts 等消费方约定一致。
+> **说明**：特性层代码需编入根目录 `BUILD.gn` 的 `number_identity` 共享库；对外 URI 与权限需与 CallUI、Contacts、MMS 等消费方约定一致。
 
 **场景1：扩展 C++ 特性模块**
 
@@ -276,7 +301,7 @@ number_identity
   | ohos.permission.MANAGE_SETTINGS | 系统授权 | 相关系统设置项读写 |
   | ohos.permission.GET_BUNDLE_INFO | 系统授权 | 查询应用包信息 |
 
-- **外部依赖**：CallUI、Contacts 通过 DataShare 消费本部件数据；Telephony 子系统提供底层能力
+- **外部依赖**：CallUI、Contacts、MMS 通过 DataShare 消费本部件数据；Telephony 子系统提供底层能力
 
 ## 参与贡献
 
@@ -287,3 +312,5 @@ number_identity
 [**callui**](https://gitcode.com/openharmony/applications_call)
 
 [**contacts**](https://gitcode.com/openharmony/applications_contacts)
+
+[**mms**](https://gitcode.com/openharmony/applications_mms)
