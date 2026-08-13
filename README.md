@@ -73,7 +73,20 @@ Consumers access Number Identity external URI paths through `DataShareHelper` (m
 | Contacts | `query` | `datashare:///com.ohos.numbermarkability/number_mark`, `.../yellow_page_view` |
 | MMS | `query` | `datashare:///com.ohos.numbermarkability/yellow_page_view` |
 
-The component also exposes NAPI APIs `getNumberLocation` / `getNumberLocations` (backed by `com.ohos.numberlocationability`) and `getNumberMarkInfo` / `setNumberMarkInfo` (backed by `.../number_mark_info`). Location text shown on the CallUI is usually queried by the call side and delivered with call data; CallUI itself directly calls mark `query`.
+**ContactsKit (`contact.numberlookup`) external NAPI**:
+
+The component implements the NAPI shared library `numberlookup` under `frameworks/js/`, installs it to `module/contact`, and exposes the module name `contact.numberlookup` (the same APIs are also registered as `telephony.numberidentity`). These APIs are **system-app only** (non-system callers are rejected). Internally they access this component's DataShare Ability, so consumers such as Contacts can query location and read/write number marks via JS/ArkTS without assembling URIs themselves.
+
+| API | Purpose | Underlying DataShare | Permission |
+|-----|---------|----------------------|------------|
+| `getNumberLocation` | Query location for one number | `datashare:///com.ohos.numberlocationability` (`query`) | `GET_TELEPHONY_STATE` |
+| `getNumberLocations` | Batch query locations | Same as above | `GET_TELEPHONY_STATE` |
+| `getNumberMarkInfo` | Query mark info (including yellow-page hits) | `datashare:///com.ohos.numbermarkability/number_mark_info` (`query`) | `GET_TELEPHONY_STATE` |
+| `setNumberMarkInfo` | Create / update / delete a number mark | `.../number_mark_info` (`update`) | `SET_TELEPHONY_STATE` |
+
+Typical parameters: Ability `context` and the phone number(s); location APIs optionally take `isExactMatch`; `setNumberMarkInfo` also requires `markType` (`MARK_TYPE_NONE` means delete) and may include `customMarkContent` for custom marks. Mark query results include fields such as `markType`, `markContent`, `markCount`, `markSource`, `isCloud`, and `markDetails`.
+
+Location text shown on CallUI is usually queried by the call side and delivered with call data; CallUI itself directly calls mark DataShare `query`. Contacts-side number resolution and user marking can use the ContactsKit NAPI above.
 
 **Invocation scenarios**:
 
@@ -84,7 +97,7 @@ Showing marks and location on the incoming-call UI, resolving numbers in contact
 This project supports **standalone Hvigor HAP builds** and **OpenHarmony system GN integration** (HAP + native shared library + prebuilt data). The product bundle name is `com.ohos.numberidentity`.
 
 ### Environment Requirements
-- OpenHarmony SDK: compileSdkVersion 26, compatibleSdkVersion 23
+- OpenHarmony SDK: compileSdkVersion 26.0.0, compatibleSdkVersion 23, targetSdkVersion 23
 - OpenHarmony source tree (component path: `base/telephony/number_identity`) and GN toolchain (for system integration)
 - DevEco Studio or command-line Hvigor
 - System signing configuration (see `signature/`)
@@ -277,7 +290,7 @@ number_identity
 ├─hvigor/                               # Hvigor build configuration
 ├─BUILD.gn                              # System GN build entry
 ├─bundle.json                           # Component ownership and build groups
-├─build-profile.json5                   # Project-level SDK configuration
+├─build-profile.json5                   # Project-level configuration
 ├─oh-package.json5
 ├─OAT.xml                               # Open-source compliance audit
 ├─LICENSE

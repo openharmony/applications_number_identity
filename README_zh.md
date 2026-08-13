@@ -73,7 +73,20 @@ Number Identity 向 **CallUI**、**Contacts**、**MMS（短信）** 等系统应
 | Contacts | `query` | `datashare:///com.ohos.numbermarkability/number_mark`、`.../yellow_page_view` |
 | MMS | `query` | `datashare:///com.ohos.numbermarkability/yellow_page_view` |
 
-另外，部件还通过 NAPI 对外提供 `getNumberLocation` / `getNumberLocations`（对应 `com.ohos.numberlocationability`）以及 `getNumberMarkInfo` / `setNumberMarkInfo`（对应 `.../number_mark_info`）。CallUI 界面上的归属地展示通常由通话侧先查询后随通话数据下发，CallUI 侧直接调用的是标记 `query`。
+**ContactsKit（`contact.numberlookup`）对外 NAPI**：
+
+部件在 `frameworks/js/` 中实现 NAPI 共享库 `numberlookup`，安装到 `module/contact`，对外模块名为 `contact.numberlookup`（同源能力亦注册为 `telephony.numberidentity`）。该接口面向**系统应用**（非系统应用调用会被拒绝），内部通过 DataShare 访问本部件 Ability，供 Contacts 等消费方以 JS/ArkTS API 查询归属地、读写号码标记，而无需自行拼装 URI。
+
+| API | 作用 | 底层 DataShare | 权限 |
+|-----|------|----------------|------|
+| `getNumberLocation` | 查询单个号码归属地 | `datashare:///com.ohos.numberlocationability`（`query`） | `GET_TELEPHONY_STATE` |
+| `getNumberLocations` | 批量查询号码归属地 | 同上 | `GET_TELEPHONY_STATE` |
+| `getNumberMarkInfo` | 查询号码标记信息（含黄页命中等） | `datashare:///com.ohos.numbermarkability/number_mark_info`（`query`） | `GET_TELEPHONY_STATE` |
+| `setNumberMarkInfo` | 写入 / 更新 / 删除号码标记 | `.../number_mark_info`（`update`） | `SET_TELEPHONY_STATE` |
+
+典型入参：均需传入 Ability `context` 与号码；归属地接口可选 `isExactMatch`；`setNumberMarkInfo` 另需 `markType`（`MARK_TYPE_NONE` 表示删除），自定义标记可附带 `customMarkContent`。标记查询结果字段包括 `markType`、`markContent`、`markCount`、`markSource`、`isCloud`、`markDetails` 等。
+
+CallUI 界面上的归属地展示通常由通话侧先查询后随通话数据下发，CallUI 侧直接调用的是标记 DataShare `query`；Contacts 侧号码解析与用户打标则可走上述 ContactsKit NAPI。
 
 **调用场景**：
 
@@ -84,7 +97,7 @@ Number Identity 向 **CallUI**、**Contacts**、**MMS（短信）** 等系统应
 本工程支持 **Hvigor 独立构建 HAP** 与 **OpenHarmony 系统 GN 合入**（HAP + 原生共享库 + 预置数据），产物包名 `com.ohos.numberidentity`。
 
 ### 环境要求
-- Openharmony SDK: compileSdkVersion 26, compatibleSdkVersion 23
+- Openharmony SDK: compileSdkVersion 26.0.0, compatibleSdkVersion 23, targetSdkVersion 23
 - OpenHarmony 系统源码树（部件路径：`base/telephony/number_identity`）及 GN 工具链（系统合入时）
 - DevEco Studio 或命令行 Hvigor
 - 系统签名配置（见 `signature/`）
@@ -277,7 +290,7 @@ number_identity
 ├─hvigor/                               # Hvigor 构建配置
 ├─BUILD.gn                              # 系统 GN 构建入口
 ├─bundle.json                           # 部件归属与构建分组
-├─build-profile.json5                   # 工程级 SDK 配置
+├─build-profile.json5                   # 工程级配置
 ├─oh-package.json5
 ├─OAT.xml                               # 开源合规审计
 ├─LICENSE
