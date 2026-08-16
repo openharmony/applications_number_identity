@@ -31,6 +31,7 @@
         <filefilterlist>
             <filefilter name="defaultFilter" desc="Files not to check">
                 <filteritem type="filename" name="*.png|*.PNG|*.jpg|*.jpeg|*.webp" desc="self developed image"/>
+                <filteritem type="filename" name="numberlocation.data|numberlocation.dat|yellowpage.data" desc="preset number location and yellow page data files"/>
                 <!--filteritem type="filename" name="*.uvwxyz" desc="Describe the reason for filtering scan results"/-->
                 <!--filteritem type="filepath" name="abcdefg/.*.uvwxyz" desc="Describe the reason for filtering scan results"/-->
                 <!--filteritem type="filepath" name="projectroot/[a-zA-Z0-9]{20,}.sh" desc="Temp files"/-->
@@ -65,6 +66,7 @@
                 <!--filteritem type="filepath" name="abcdefg/.*.uvwxyz" desc="Describe the reason for filtering scan results"/-->
                 <!--filteritem type="filepath" name="projectroot/[a-zA-Z0-9]{20,}.sh" desc="Temp files"/-->
                 <filteritem type="filename" name="*.ets|*.hpp" desc="file is recognized as a binary file."/>
+                <filteritem type="filename" name="numberlocation.dat" desc="binary number location database"/>
             </filefilter>
 
         </filefilterlist>
