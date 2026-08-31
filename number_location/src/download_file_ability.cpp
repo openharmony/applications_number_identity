@@ -15,6 +15,7 @@
 #include <memory>
 
 #include "download_file_ability.h"
+#include "parse_work_id_int.h"
 
 #include "ability_context.h"
 #include "ability_loader.h"
@@ -114,7 +115,11 @@ void DownloadFileAbility::DealTaskTypeOfWorkSheduler(const DataShare::DataShareV
     std::string forceUpdated;
     DataShare::DataShareValueObject object = value.Get("work_id", isValid);
     std::string workIdStr = object;
-    int workId = atoi(workIdStr.c_str());
+    int32_t workId = 0;
+    if (!ParseWorkIdInt(workIdStr, workId)) {
+        NUMBER_IDENTITY_LOGE("invalid work_id: %{public}s", workIdStr.c_str());
+        return;
+    }
     NUMBER_IDENTITY_LOGI("workId: %{public}d", workId);
     auto token = parentContext_ != nullptr ? parentContext_->GetToken() : nullptr;
     networkType = DownloadFileRdb::GetInstance().QueryNetworkType(token);
